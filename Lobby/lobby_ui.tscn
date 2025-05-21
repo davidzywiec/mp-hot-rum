@@ -1,0 +1,66 @@
+[gd_scene load_steps=3 format=3 uid="uid://bxy7jdqti0tt"]
+
+[ext_resource type="Script" uid="uid://mdnijr3flfyy" path="res://Lobby/lobby_ui.gd" id="1_8xbpm"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_8xbpm"]
+font_size = 48
+font_color = Color(0.471006, 0.692005, 0.966896, 1)
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_8xbpm")
+
+[node name="GridContainer" type="GridContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+columns = 3
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="GridContainer"]
+spawn_path = NodePath("..")
+
+[node name="VBC" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -66.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="StartButton" type="Button" parent="VBC"]
+visible = false
+layout_mode = 2
+text = "Start"
+
+[node name="ReadyButton" type="Button" parent="VBC"]
+layout_mode = 2
+text = "Ready"
+
+[node name="Starting" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -11.5
+offset_right = 20.0
+offset_bottom = 11.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "STARTING IN 5..."
+label_settings = SubResource("LabelSettings_8xbpm")
+
+[node name="Timer" type="Timer" parent="Starting"]
