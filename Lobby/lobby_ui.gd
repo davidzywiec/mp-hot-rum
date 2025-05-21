@@ -9,6 +9,9 @@ var ready_btn = $VBC/ReadyButton
 @onready
 var start_btn = $VBC/StartButton
 
+var label_timer_scene = preload("res://Utility/Timer/CountdownLabelTimer.tscn")
+var label_timer = label_timer_scene.instantiate()
+
 var ready_status: bool = false
 
 func _ready() -> void:
@@ -63,4 +66,9 @@ func set_ui_actions(ready: bool) -> void:
 
 func start_game() -> void:
 	print("Start game pressed by %s" % LobbyManager.players[multiplayer.get_unique_id()]["Name"])
-	
+	# Configure it before adding to the scene
+	label_timer.configure("Game starting in... ", 10.0)
+	# Add to scene
+	add_child(label_timer)
+	# Start the timer
+	label_timer.start_timer()
