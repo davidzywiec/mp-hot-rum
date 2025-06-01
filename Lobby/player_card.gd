@@ -1,6 +1,6 @@
 extends ColorRect
 
-class_name player_card
+class_name PlayerCard
 
 @onready
 var username_label : Label = $Label
@@ -13,3 +13,5 @@ func set_ready(ready_status: bool) -> void:
 		self.color = '91ff81'
 	else:
 		self.color = 'ffffff'
+		
+	

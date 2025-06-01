@@ -17,9 +17,10 @@ config/icon="uid://dl0yrrl8pp32i"
 
 [autoload]
 
-LobbyManager="*res://Singletons/LobbyManager.gd"
 SignalManager="*res://Singletons/SignalManager.gd"
 GameManager="*res://Singletons/GameManager.gd"
+Network_Manager="*res://Network/NetworkManager.gd"
+Game_State_Manager="*res://Singletons/GameStateManager.gd"
 
 [display]
 
