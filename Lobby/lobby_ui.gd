@@ -52,7 +52,7 @@ func update_lobby_ui(players_data: Array) -> void:
 		node.queue_free()
 
 	# Track if all players are ready
-	var all_ready : bool = true
+	var all_ready : bool = false
 	var is_host : bool = false
 	var my_id : int = multiplayer.get_unique_id()
 
@@ -65,10 +65,13 @@ func update_lobby_ui(players_data: Array) -> void:
 		card.set_ready(player_info.ready)
 		if player_info.peer_id == my_id:
 			set_ready_connection(card)
+		if i == 0 and player_info.peer_id == multiplayer.get_unique_id():
+			all_ready = true
 
 		if !player_info.ready:
 			all_ready = false
-
+	if players_data.size() < 3:
+			all_ready = false
 	# Show/hide buttons based on your role and readiness
 	set_ui_actions(all_ready)
 
