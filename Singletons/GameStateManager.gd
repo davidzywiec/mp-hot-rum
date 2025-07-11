@@ -21,3 +21,11 @@ func receive_player_state(players_data: Array) -> void:
 # Send player state to server
 func send_player_state(player_state):
 	rpc("receive_player_state", player_state)
+
+# Called by the server to send start countdown
+@rpc
+func receive_toggle_countdown(start_timer: bool) -> void:
+	print("Received: Game starting")
+
+func toggle_game_countdown(start_timer: bool) -> void:
+	rpc("receive_toggle_countdown", start_timer)
