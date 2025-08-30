@@ -9,7 +9,11 @@ signal failed_connection
 signal start_server
 signal join_server(adress)
 signal refresh_lobby
-#signal register_username(username)
 signal player_ready(ready)
 signal ready_to_start(bool)
-signal start_game_countdown()
+signal toggle_game_countdown(bool)
+
+# NEW: broadcast a scene change with a path determined by the server
+signal change_scene(path: String)
+
+signal host_changed(peer_id: int)

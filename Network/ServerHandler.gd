@@ -11,6 +11,10 @@ const MAX_CONNECTIONS = 6
 var players := {} # key: player_name, value: Player
 var ready_players := {}
 
+
+# TODO: point this at your actual game scene when it’s added
+const GAME_SCENE_PATH := "res://Game/MainGame.tscn"
+
 # Initializes the server and sets it as the active multiplayer peer
 func start():
 	var peer = ENetMultiplayerPeer.new()
@@ -27,6 +31,7 @@ func start():
 	multiplayer.multiplayer_peer = peer
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	
 	
 	print("✅ Server successfully started on port %d" % PORT)
 	print("📡 Connecting register_username signal to Network_Manager.register_player")
@@ -50,6 +55,8 @@ func register_player(new_player_info: String, peer_id: int) -> void:
 		print("%s has joined the game!" % new_player_info)
 		SignalManager.player_connected.emit(new_player_info)
 		_broadcast_player_state()
+		_broadcast_host_if_changed()
+
 
 # Called externally when the client marks themselves ready
 func register_ready_flag(peer_id: int, ready_flag: bool) -> void:
@@ -68,6 +75,26 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	players.erase(peer_id)
 	ready_players.erase(peer_id)
 	_broadcast_player_state()
+	_broadcast_host_if_changed()   # <-- key line
+
+
+func _current_host_peer_id() -> int:
+	# “First player” == lowest connected peer_id
+	var ids := []
+	# Prefer authoritative list; use the registries you maintain
+	for pid in players.keys():
+		ids.append(pid)
+	ids.sort()
+	if ids.size() > 0:
+		return ids[0]
+	else:
+		return -1
+
+func _broadcast_host_if_changed() -> void:
+	var host := _current_host_peer_id()
+	if host == -1:
+		return
+	Game_State_Manager.send_host(host)
 
 # Sync player state to all connected clients
 func _broadcast_player_state() -> void:
@@ -88,3 +115,22 @@ func _broadcast_player_state() -> void:
 	# Optional: preview the data being sent
 	print("📡 Broadcasting player state to clients:", state_array)
 	Game_State_Manager.send_player_state(state_array)
+
+# Sync Countdown to start game (SERVER-AUTHORITATIVE)
+func _toggle_countdown(flag: bool) -> void:
+	if flag:
+		print("💻 Server starting countdown to start game!")
+		var seconds := 10
+		var end_unix := Time.get_unix_time_from_system() + seconds
+		# Broadcast exact end time to every client
+		Game_State_Manager.send_countdown(end_unix)
+		# Schedule the scene change on the server
+		var t := get_tree().create_timer(float(seconds), false)
+		t.timeout.connect(func ():
+			print("💻 Countdown finished — ordering scene change")
+			Game_State_Manager.send_change_scene(GAME_SCENE_PATH)
+		)
+	else:
+		print("💻 Server stopping countdown to start game!")
+		# Optional: if you add a 'cancel' path, you can broadcast a stop here
+		Game_State_Manager.send_toggle_countdown(false)

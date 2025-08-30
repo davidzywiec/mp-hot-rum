@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://cphp6eghcffai"]
+
+[node name="MainGame" type="Node2D"]
+
+[node name="Label" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 424.0
+offset_top = 339.0
+offset_right = 464.0
+offset_bottom = 362.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "PLACE HOLDER GAME"
