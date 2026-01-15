@@ -1,4 +1,6 @@
-[gd_scene format=3 uid="uid://cphp6eghcffai"]
+[gd_scene load_steps=2 format=3 uid="uid://cphp6eghcffai"]
+
+[ext_resource type="Texture2D" uid="uid://b38qwflnw0c0d" path="res://Sprites/Deck.png" id="1_a0tey"]
 
 [node name="MainGame" type="Node2D"]
 
@@ -15,3 +17,7 @@ offset_bottom = 362.0
 grow_horizontal = 2
 grow_vertical = 2
 text = "PLACE HOLDER GAME"
+
+[node name="Deck" type="Sprite2D" parent="."]
+position = Vector2(72, 81)
+texture = ExtResource("1_a0tey")
