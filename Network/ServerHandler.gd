@@ -10,7 +10,7 @@ const MAX_CONNECTIONS = 6
 # Player registry and ready-tracking
 var players := {} # key: player_name, value: Player
 var ready_players := {}
-
+var deck : Deck
 
 # TODO: point this at your actual game scene when it’s added
 const GAME_SCENE_PATH := "res://Game/MainGame.tscn"
@@ -129,6 +129,7 @@ func _toggle_countdown(flag: bool) -> void:
 		t.timeout.connect(func ():
 			print("💻 Countdown finished — ordering scene change")
 			Game_State_Manager.send_change_scene(GAME_SCENE_PATH)
+			deck = Deck.new()
 		)
 	else:
 		print("💻 Server stopping countdown to start game!")
