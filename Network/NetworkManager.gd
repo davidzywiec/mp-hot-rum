@@ -17,6 +17,7 @@ func start_server():
 
 	# Delegate the server startup to the handler
 	handler.start()
+	GameManager.host_flag = true
 
 func join_server(address: String):
 	handler = ClientHandler.new()

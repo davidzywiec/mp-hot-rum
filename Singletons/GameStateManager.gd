@@ -69,7 +69,6 @@ func send_change_scene(path: String) -> void:
 	SignalManager.change_scene.emit(path)
 
 # --- Host assignment sync ---
-
 @rpc
 func receive_host(new_host_peer_id: int) -> void:
 	print("👑 New host is:", new_host_peer_id)
