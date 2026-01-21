@@ -19,5 +19,5 @@ func _init(p_suit: Suit, p_number: int, p_point_value: int) -> void:
 	number = p_number
 	point_value = p_point_value
 
-func to_string() -> String:
+func _to_string() -> String:
 	return "%s-%d (%d pts)" % [Suit.keys()[suit], number, point_value]

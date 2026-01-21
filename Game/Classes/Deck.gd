@@ -4,12 +4,17 @@ extends RefCounted
 
 var cards: Array[Card] = []
 
-func _init(players_count: int, initial_cards: Array[Card] = []) -> void:
+func _init(players_count: int) -> void:
 	
 	#Get the number of decks needed on player count. 1 deck per 2 people.
 	var loop = roundf(players_count / 2)
 	for x in loop:
-		build_deck()	
+		build_deck()
+	shuffle()
+	print("Deck has been created. Looping through the first 10 cards in the deck...")
+	for x in range(10):
+		print("Card %s", cards[x])
+
 
 func shuffle() -> void:
 	cards.shuffle()

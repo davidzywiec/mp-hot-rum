@@ -10,7 +10,6 @@ const MAX_CONNECTIONS = 6
 # Player registry and ready-tracking
 var players := {} # key: player_name, value: Player
 var ready_players := {}
-var deck : Deck
 
 # TODO: point this at your actual game scene when it’s added
 const GAME_SCENE_PATH := "res://Game/MainGame.tscn"
@@ -117,10 +116,10 @@ func _broadcast_player_state() -> void:
 	Game_State_Manager.send_player_state(state_array)
 
 # Sync Countdown to start game (SERVER-AUTHORITATIVE)
-func _toggle_countdown(flag: bool) -> void:
+func _toggle_countdown(flag: bool, sec: float) -> void:
 	if flag:
 		print("💻 Server starting countdown to start game!")
-		var seconds := 10
+		var seconds := sec
 		var end_unix := Time.get_unix_time_from_system() + seconds
 		# Broadcast exact end time to every client
 		Game_State_Manager.send_countdown(end_unix)
@@ -129,9 +128,18 @@ func _toggle_countdown(flag: bool) -> void:
 		t.timeout.connect(func ():
 			print("💻 Countdown finished — ordering scene change")
 			Game_State_Manager.send_change_scene(GAME_SCENE_PATH)
-			deck = Deck.new()
+			GameManager.create_deck(players.size())
 		)
 	else:
 		print("💻 Server stopping countdown to start game!")
 		# Optional: if you add a 'cancel' path, you can broadcast a stop here
 		Game_State_Manager.send_toggle_countdown(false)
+
+func create_fake_game() -> void:
+	#Create 5 fake players and set them to ready.
+	for i in range(5):
+		register_player(str(i), i+10)
+		register_ready_flag(i+10, true)
+	_toggle_countdown(true, 1)
+
+		

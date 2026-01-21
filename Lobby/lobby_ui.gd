@@ -8,6 +8,8 @@ var player_card = preload("res://Lobby/player_card.tscn")
 var ready_btn = $VBC/ReadyButton
 @onready
 var start_btn = $VBC/StartButton
+@onready
+var fake_btn = $VBC/OVERRIDE_START_BT
 
 
 var label_timer_scene = preload("res://Utility/Timer/CountdownLabelTimer.tscn")
@@ -23,6 +25,7 @@ func _ready() -> void:
 	set_ui_actions(false)
 	ready_btn.pressed.connect(set_ready_flag)
 	start_btn.pressed.connect(start_game)
+	fake_btn.pressed.connect(start_fake_game)
 	SignalManager.host_changed.connect(_on_host_changed)
 	Game_State_Manager.player_state_updated.connect(update_lobby_ui)
 
@@ -138,4 +141,10 @@ func _on_change_scene(path: String) -> void:
 func _on_host_changed(host_peer_id: int) -> void:
 	var me := multiplayer.get_unique_id()
 	is_host = (me == host_peer_id)
+	
+func start_fake_game() -> void:
+	
+	if multiplayer.is_server():
+		Network_Manager.handler.create_fake_game()
+		
 	
