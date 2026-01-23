@@ -3,7 +3,7 @@ extends Control
 @onready
 var player_container = $GridContainer
 @onready
-var player_card = preload("res://Lobby/player_card.tscn")
+var player_card = preload("res://scenes/lobby/player_card.tscn")
 @onready
 var ready_btn = $VBC/ReadyButton
 @onready
@@ -12,13 +12,13 @@ var start_btn = $VBC/StartButton
 var fake_btn = $VBC/OVERRIDE_START_BT
 
 
-var label_timer_scene = preload("res://Utility/Timer/CountdownLabelTimer.tscn")
+var label_timer_scene = preload("res://scenes/utility/CountdownLabelTimer.tscn")
 var label_timer = label_timer_scene.instantiate()
 var ready_status: bool = false
 var is_host := false
 
 var countdown_connection_done := false
-@export var next_scene_fallback: String = "res://Menu/main_menu.tscn" # used only if server sends same
+@export var next_scene_fallback: String = "res://scenes/menu/main_menu.tscn" # used only if server sends same
 
 
 func _ready() -> void:

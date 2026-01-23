@@ -8,7 +8,7 @@ extends Control
 @onready var username_line_edit: LineEdit = $MarginContainer/VBoxContainer/UserName
 
 # --- Lobby Scene to Load After Successful Connection ---
-@export var lobby_scene: PackedScene = preload("res://Lobby/lobby_ui.tscn")
+@export var lobby_scene: PackedScene = preload("res://scenes/lobby/lobby_ui.tscn")
 
 func _ready() -> void:
 	# Connect UI buttons to their handlers

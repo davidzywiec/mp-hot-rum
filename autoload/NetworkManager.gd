@@ -36,9 +36,9 @@ func register_ready_flag(peer_id: int, ready_flag: bool):
 		handler.register_ready_flag(peer_id, ready_flag)
 
 @rpc("any_peer")
-func register_countdown(peer_id: int, flag: bool):
+func register_countdown(peer_id: int, flag: bool, countdown_time: int = 10):
 	if handler is ServerHandler:
-		handler._toggle_countdown(flag)
+		handler._toggle_countdown(flag, countdown_time)
 
 func is_server() -> bool:
 	return handler is ServerHandler

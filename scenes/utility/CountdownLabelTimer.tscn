@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://cvfxo2sv3x623"]
 
-[ext_resource type="Script" uid="uid://cm0yoygwpbt8v" path="res://Utility/Timer/countdown_label_timer.gd" id="1_531vy"]
+[ext_resource type="Script" uid="uid://cm0yoygwpbt8v" path="res://scripts/utility/countdown_label_timer.gd" id="1_531vy"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_8xbpm"]
 font_size = 48

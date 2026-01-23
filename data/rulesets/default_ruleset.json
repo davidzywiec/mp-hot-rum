@@ -1,0 +1,72 @@
+{
+	"id": "default_ruleset",
+	"name": "Default Hot Rum Settings",
+	"description": "The default ruleset for Hot Rum, featuring 8 rounds with a mix of sets and runs to complete.",
+	"rounds_total": 8.0,
+	"rounds": [
+		{
+			"round": 1.0,
+			"deal_count": 7.0,
+			"all_cards": false,
+			"sets": 2.0,
+			"run_of_4": 0.0,
+			"run_of_7": 0.0
+		},
+		{
+			"round": 2.0,
+			"deal_count": 8.0,
+			"all_cards": false,
+			"sets": 1.0,
+			"run_of_4": 1.0,
+			"run_of_7": 0.0
+		},
+		{
+			"round": 3.0,
+			"deal_count": 9.0,
+			"all_cards": false,
+			"sets": 0.0,
+			"run_of_4": 2.0,
+			"run_of_7": 0.0
+		},
+		{
+			"round": 4.0,
+			"deal_count": 10.0,
+			"all_cards": false,
+			"sets": 3.0,
+			"run_of_4": 0.0,
+			"run_of_7": 0.0
+		},
+		{
+			"round": 5.0,
+			"deal_count": 11.0,
+			"all_cards": false,
+			"sets": 1.0,
+			"run_of_4": 0.0,
+			"run_of_7": 1.0
+		},
+		{
+			"round": 6.0,
+			"deal_count": 11.0,
+			"all_cards": false,
+			"sets": 2.0,
+			"run_of_4": 1.0,
+			"run_of_7": 0.0
+		},
+		{
+			"round": 7.0,
+			"deal_count": 12.0,
+			"all_cards": false,
+			"sets": 1.0,
+			"run_of_4": 2.0,
+			"run_of_7": 0.0
+		},
+		{
+			"round": 1.0,
+			"deal_count": 7.0,
+			"all_cards": true,
+			"sets": 0.0,
+			"run_of_4": 3.0,
+			"run_of_7": 0.0
+		}
+	]
+}

@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://ccp7hx76tbmf2"]
 
-[ext_resource type="Script" uid="uid://bvqhfm85f5a73" path="res://Lobby/player_card.gd" id="1_avv0w"]
+[ext_resource type="Script" uid="uid://bvqhfm85f5a73" path="res://scripts/lobby/player_card.gd" id="1_avv0w"]
 
 [node name="PlayerCard" type="ColorRect"]
 custom_minimum_size = Vector2(340, 340)

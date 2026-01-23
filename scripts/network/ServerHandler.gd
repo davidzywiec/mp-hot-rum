@@ -12,7 +12,7 @@ var players := {} # key: player_name, value: Player
 var ready_players := {}
 
 # TODO: point this at your actual game scene when it’s added
-const GAME_SCENE_PATH := "res://Game/MainGame.tscn"
+const GAME_SCENE_PATH := "res://scenes/game/MainGame.tscn"
 
 # Initializes the server and sets it as the active multiplayer peer
 func start():
@@ -116,7 +116,7 @@ func _broadcast_player_state() -> void:
 	Game_State_Manager.send_player_state(state_array)
 
 # Sync Countdown to start game (SERVER-AUTHORITATIVE)
-func _toggle_countdown(flag: bool, sec: float) -> void:
+func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 	if flag:
 		print("💻 Server starting countdown to start game!")
 		var seconds := sec

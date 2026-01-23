@@ -3,6 +3,7 @@ extends Node
 var host_flag : bool = false
 var deck
 
+
 #Server/Game Manager Actions
 
 #Create deck for the players based on player count

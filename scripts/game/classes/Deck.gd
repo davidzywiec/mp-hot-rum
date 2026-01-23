@@ -11,10 +11,6 @@ func _init(players_count: int) -> void:
 	for x in loop:
 		build_deck()
 	shuffle()
-	print("Deck has been created. Looping through the first 10 cards in the deck...")
-	for x in range(10):
-		print("Card %s", cards[x])
-
 
 func shuffle() -> void:
 	cards.shuffle()
@@ -51,3 +47,12 @@ func build_deck() -> void:
 				points = 10
 			
 			add_card_to_bottom(Card.new(suit, number, points))
+			
+func deal_hand(card_count: int) -> Array[Card]:
+	
+	var hand : Array[Card] = Array()
+	
+	for x in range(card_count):
+		hand.append(draw_card())
+			
+	return hand
