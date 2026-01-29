@@ -79,3 +79,14 @@ func receive_host(new_host_peer_id: int) -> void:
 func send_host(new_host_peer_id: int) -> void:
 	rpc("receive_host", new_host_peer_id)
 	SignalManager.emit_signal("host_changed", new_host_peer_id)
+
+## --- Round Update Sync ---
+@rpc
+func receive_round_update(round: int, current_player_name: String) -> void:
+	print("🔄 Received round update: Round %d, Current Player: %s" % [round, current_player_name])
+	SignalManager.round_updated.emit(round, current_player_name)
+
+func send_round_update(round: int, current_player_name: String) -> void:
+	rpc("receive_round_update", round, current_player_name)
+	SignalManager.round_updated.emit(round, current_player_name)
+
