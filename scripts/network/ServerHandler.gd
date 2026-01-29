@@ -10,6 +10,7 @@ const MAX_CONNECTIONS = 6
 # Player registry and ready-tracking
 var players := {} # key: player_name, value: Player
 var ready_players := {}
+var game_manager: Node = null
 
 # TODO: point this at your actual game scene when it’s added
 const GAME_SCENE_PATH := "res://scenes/game/MainGame.tscn"
@@ -30,11 +31,20 @@ func start():
 	multiplayer.multiplayer_peer = peer
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	_spawn_game_manager()
 	
 	
 	print("✅ Server successfully started on port %d" % PORT)
 	print("📡 Connecting register_username signal to Network_Manager.register_player")
 	#SignalManager.register_username.connect(Network_Manager.register_player)
+
+func _spawn_game_manager() -> void:
+	if game_manager != null:
+		return
+	var gm := preload("res://autoload/GameManager.gd").new()
+	gm.name = "GameManager"
+	add_child(gm)
+	game_manager = gm
 
 # Called when a new player connects to the server
 func _on_peer_connected(peer_id: int) -> void:
@@ -137,11 +147,14 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 
 #Start the game with the current default rule set
 func start_game() -> void:
+	if game_manager == null:
+		printerr("GameManager not initialized; cannot start game.")
+		return
 	print("💻 Server loading players into game.")
-	GameManager.load_players(players)
+	game_manager.load_players(players)
 	print("💻 Server starting game with default ruleset.")
-	GameManager.start_game()
-	Game_State_Manager.send_round_update(GameManager.round_number, GameManager.get_player_name(GameManager.current_player_index))
+	game_manager.start_game()
+	Game_State_Manager.send_round_update(game_manager.round_number, game_manager.get_player_name(game_manager.current_player_index))
 
 # for testing: Create fake players and start countdown
 func create_fake_game() -> void:

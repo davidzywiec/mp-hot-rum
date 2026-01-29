@@ -7,6 +7,23 @@ class_name NetworkManager
 # Holds the current network role handler (e.g., server, client, host)
 var handler: Node = null
 
+func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	var args := OS.get_cmdline_args()
+	if args.has("--server"):
+		call_deferred("_boot_dedicated_server")
+	elif args.has("--client"):
+		# Explicit client flag: keep normal startup path
+		return
+
+func _boot_dedicated_server() -> void:
+	var server_scene := "res://scenes/server/DedicatedServer.tscn"
+	var tree := get_tree()
+	if tree.current_scene != null and tree.current_scene.scene_file_path == server_scene:
+		return
+	tree.change_scene_to_file(server_scene)
+
 # Called by UI or SignalManager to start the server
 func start_server():
 	# Create a new instance of the ServerHandler (Strategy)
@@ -17,7 +34,6 @@ func start_server():
 
 	# Delegate the server startup to the handler
 	handler.start()
-	GameManager.host_flag = true
 
 func join_server(address: String):
 	handler = ClientHandler.new()

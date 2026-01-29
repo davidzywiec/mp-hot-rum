@@ -18,7 +18,6 @@ config/icon="uid://dl0yrrl8pp32i"
 [autoload]
 
 SignalManager="*res://autoload/SignalManager.gd"
-GameManager="*res://autoload/GameManager.gd"
 Network_Manager="*res://autoload/NetworkManager.gd"
 Game_State_Manager="*res://autoload/GameStateManager.gd"
 

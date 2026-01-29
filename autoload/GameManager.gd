@@ -6,9 +6,16 @@ var ruleset : Ruleset
 #Player registries
 var players = {} # key: peer_id, value: player_data
 var player_order : Array = [] # ordered list of peer_ids for turn management
+var player_hands : Dictionary = {} # key: peer_id, value: Array of Cards
 var current_player_index : int = 0
 var starting_player_index : int = 0
 var round_number : int = 1
+
+func _ready() -> void:
+	if not multiplayer.is_server() and not OS.has_feature("server"):
+		queue_free()
+		return
+
 
 #Load ruleset from file
 func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.json") -> void:
