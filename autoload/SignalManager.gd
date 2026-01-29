@@ -17,3 +17,6 @@ signal toggle_game_countdown(bool)
 signal change_scene(path: String)
 
 signal host_changed(peer_id: int)
+
+#Game Signals
+signal round_updated(round: int, current_player_name: String)

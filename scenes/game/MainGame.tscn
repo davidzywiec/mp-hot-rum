@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://cphp6eghcffai"]
+[gd_scene load_steps=3 format=3 uid="uid://cphp6eghcffai"]
 
 [ext_resource type="Texture2D" uid="uid://b38qwflnw0c0d" path="res://assets/sprites/Deck.png" id="1_a0tey"]
+[ext_resource type="PackedScene" uid="uid://ch1dgmbxltdv8" path="res://scenes/game/GameUI.tscn" id="2_ahvv7"]
 
 [node name="MainGame" type="Node2D"]
 
@@ -21,3 +22,18 @@ text = "PLACE HOLDER GAME"
 [node name="Deck" type="Sprite2D" parent="."]
 position = Vector2(72, 81)
 texture = ExtResource("1_a0tey")
+
+[node name="UI" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 838.0
+offset_top = 74.0
+offset_right = 878.0
+offset_bottom = 114.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="GameUI" parent="UI" instance=ExtResource("2_ahvv7")]
+layout_mode = 1
+size_flags_horizontal = 2
+size_flags_vertical = 3

@@ -127,19 +127,29 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 		var t := get_tree().create_timer(float(seconds), false)
 		t.timeout.connect(func ():
 			print("💻 Countdown finished — ordering scene change")
+			start_game()
 			Game_State_Manager.send_change_scene(GAME_SCENE_PATH)
-			GameManager.create_deck(players.size())
 		)
 	else:
 		print("💻 Server stopping countdown to start game!")
 		# Optional: if you add a 'cancel' path, you can broadcast a stop here
 		Game_State_Manager.send_toggle_countdown(false)
 
+#Start the game with the current default rule set
+func start_game() -> void:
+	print("💻 Server loading players into game.")
+	GameManager.load_players(players)
+	print("💻 Server starting game with default ruleset.")
+	GameManager.start_game()
+	Game_State_Manager.send_round_update(GameManager.round_number, GameManager.get_player_name(GameManager.current_player_index))
+
+# for testing: Create fake players and start countdown
 func create_fake_game() -> void:
 	#Create 5 fake players and set them to ready.
 	for i in range(5):
-		register_player(str(i), i+10)
+		register_player("Test Player " + str(i), i+10)
 		register_ready_flag(i+10, true)
 	_toggle_countdown(true, 1)
+
 
 		

@@ -1,0 +1,73 @@
+[gd_scene load_steps=3 format=3 uid="uid://ch1dgmbxltdv8"]
+
+[ext_resource type="Script" uid="uid://dghdt6tbxbaex" path="res://scripts/game/game_ui.gd" id="1_kofqh"]
+[ext_resource type="Theme" uid="uid://ddgkq8lj3umuh" path="res://Themes/GameUI.tres" id="2_t5mpo"]
+
+[node name="GameUI" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_kofqh")
+
+[node name="RoundDataContainer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_t5mpo")
+
+[node name="MC" type="MarginContainer" parent="RoundDataContainer"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -78.0
+offset_bottom = 40.0
+grow_horizontal = 0
+theme = ExtResource("2_t5mpo")
+
+[node name="BackgroundContainer" type="ColorRect" parent="RoundDataContainer/MC"]
+layout_mode = 2
+theme = ExtResource("2_t5mpo")
+color = Color(0.264184, 0.701187, 0.914353, 0.305882)
+
+[node name="VBCRoundData" type="VBoxContainer" parent="RoundDataContainer/MC"]
+layout_mode = 2
+theme = ExtResource("2_t5mpo")
+
+[node name="RoundNumberContainer" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData"]
+layout_mode = 2
+size_flags_vertical = 3
+theme = ExtResource("2_t5mpo")
+
+[node name="RoundNumber" type="RichTextLabel" parent="RoundDataContainer/MC/VBCRoundData/RoundNumberContainer"]
+layout_mode = 2
+theme = ExtResource("2_t5mpo")
+bbcode_enabled = true
+text = "Round: 0"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CurrentPlayerContainer" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData"]
+layout_mode = 2
+size_flags_vertical = 3
+theme = ExtResource("2_t5mpo")
+
+[node name="CurrentPlayer" type="RichTextLabel" parent="RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer"]
+layout_mode = 2
+theme = ExtResource("2_t5mpo")
+bbcode_enabled = true
+text = "Current Turn: Davey"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
