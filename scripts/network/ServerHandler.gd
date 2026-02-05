@@ -1,4 +1,4 @@
-# ServerHandler.gd
+﻿# ServerHandler.gd
 # Implements server-specific networking behavior
 
 extends Node
@@ -6,14 +6,29 @@ class_name ServerHandler
 
 const PORT = 7000
 const MAX_CONNECTIONS = 6
-const DEBUG_SETTING_PATH := "debug/network_debug"
+const NETWORK_LOG_SETTING_PATH := "debug/network_logs"
+const SNAPSHOT_LOG_SETTING_PATH := "debug/snapshot_logs"
+
+# Timestamped logging for server output.
+func _ts() -> String:
+	return Time.get_datetime_string_from_system()
+
+func _log(msg: String) -> void:
+	if not ProjectSettings.get_setting(NETWORK_LOG_SETTING_PATH, true):
+		return
+	print("[%s] %s" % [_ts(), msg])
+
+func _log_err(msg: String) -> void:
+	if not ProjectSettings.get_setting(NETWORK_LOG_SETTING_PATH, true):
+		return
+	printerr("[%s] %s" % [_ts(), msg])
 
 # Player registry and ready-tracking
 var players := {} # key: player_name, value: Player
 var ready_players := {}
-var game_manager: Node = null
+var game_manager = null
 
-# TODO: point this at your actual game scene when it’s added
+# TODO: point this at your actual game scene when its added
 const GAME_SCENE_PATH := "res://scenes/game/MainGame.tscn"
 
 # Initializes the server and sets it as the active multiplayer peer
@@ -22,10 +37,10 @@ func start():
 
 	# Attempt to bind server on the given port with max allowed clients
 	var error = peer.create_server(PORT, MAX_CONNECTIONS)
-	
+
 	# Check if there was an error during setup
 	if error != OK:
-		print("❌ Failed to start server. Error code:", error)
+		_log_err("Failed to start server. Error code: %s" % str(error))
 		return
 
 	# Set this peer as the multiplayer authority
@@ -33,36 +48,35 @@ func start():
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	_bind_game_manager()
-	
-	
-	print("✅ Server successfully started on port %d" % PORT)
-	print("📡 Connecting register_username signal to Network_Manager.register_player")
+
+	_log("Server successfully started on port %d" % PORT)
+	_log("Connecting register_username signal to Network_Manager.register_player")
 	#SignalManager.register_username.connect(Network_Manager.register_player)
 
 func _bind_game_manager() -> void:
 	if game_manager != null:
 		return
-	if typeof(GameManager) == TYPE_NIL:
-		printerr("GameManager autoload not found; cannot bind server game state.")
+	if not get_node_or_null("/root/GameManager"):
+		_log_err("GameManager autoload not found; cannot bind server game state.")
 		return
-	game_manager = GameManager
+	game_manager = get_node("/root/GameManager")
 
 # Called when a new player connects to the server
 func _on_peer_connected(peer_id: int) -> void:
-	print("Player connected with peer ID:", peer_id)
+	_log("Player connected with peer ID: %s" % str(peer_id))
 	# Defer actual registration until username is received
 
 # Called externally when the client sends their username
 func register_player(new_player_info: String, peer_id: int) -> void:
-	print("Server registering:", new_player_info)
-	
+	_log("Server registering: %s" % new_player_info)
+
 	if not players.has(peer_id):
 		var player = Player.new()
 		player.peer_id = peer_id
 		player.name = new_player_info
 		players[peer_id] = player
-			
-		print("%s has joined the game!" % new_player_info)
+
+		_log("%s has joined the game!" % new_player_info)
 		SignalManager.player_connected.emit(new_player_info)
 		if game_manager != null:
 			game_manager.load_players(players)
@@ -70,33 +84,31 @@ func register_player(new_player_info: String, peer_id: int) -> void:
 		_broadcast_game_state()
 		_broadcast_host_if_changed()
 
-
 # Called externally when the client marks themselves ready
 func register_ready_flag(peer_id: int, ready_flag: bool) -> void:
 	if players.has(peer_id):
 		players[peer_id].ready = ready_flag
 		ready_players[peer_id] = ready_flag
-		
-		print("%s is ready." % players[peer_id].name)
+
+		_log("%s is ready." % players[peer_id].name)
 		SignalManager.player_ready.emit(peer_id)
 		_broadcast_player_state()
 		_broadcast_game_state()
 
 # Called when a player disconnects
 func _on_peer_disconnected(peer_id: int) -> void:
-	print("Peer %d disconnected." % peer_id)
-	# Optional: implement disconnection cleanup if you store peer_id → name mapping
+	_log("Peer %d disconnected." % peer_id)
+	# Optional: implement disconnection cleanup if you store peer_id -> name mapping
 	players.erase(peer_id)
 	ready_players.erase(peer_id)
 	if game_manager != null:
 		game_manager.load_players(players)
 	_broadcast_player_state()
 	_broadcast_game_state()
-	_broadcast_host_if_changed()   # <-- key line
-
+	_broadcast_host_if_changed()
 
 func _current_host_peer_id() -> int:
-	# “First player” == lowest connected peer_id
+	# First player == lowest connected peer_id
 	var ids := []
 	# Prefer authoritative list; use the registries you maintain
 	for pid in players.keys():
@@ -117,12 +129,12 @@ func _broadcast_host_if_changed() -> void:
 func _broadcast_player_state() -> void:
 	# Check for valid peer setup
 	if multiplayer.multiplayer_peer == null:
-		printerr("🚫 Cannot broadcast: multiplayer peer is null.")
+		_log_err("Cannot broadcast: multiplayer peer is null.")
 		return
 
 	# No players to broadcast? Warn and skip.
 	if players.is_empty():
-		print("⚠️ Warning: No players to broadcast.")
+		_log("Warning: No players to broadcast.")
 		return
 
 	var state_array: Array = []
@@ -130,14 +142,14 @@ func _broadcast_player_state() -> void:
 		state_array.append(p.to_public_dict())
 
 	# Optional: preview the data being sent
-	print("📡 Broadcasting player state to clients:", state_array)
+	_log("Broadcasting player state to clients: %s" % str(state_array))
 	Game_State_Manager.send_player_state(state_array)
 
 func _broadcast_game_state() -> void:
 	if game_manager == null:
 		return
-	if ProjectSettings.get_setting(DEBUG_SETTING_PATH, false):
-		print("🧾 Broadcasting game snapshot to clients.")
+	if ProjectSettings.get_setting(SNAPSHOT_LOG_SETTING_PATH, false):
+		_log("Broadcasting game snapshot to clients.")
 	var state_players: Array = []
 	for p in game_manager.players.values():
 		state_players.append(p.to_public_dict())
@@ -155,14 +167,21 @@ func _broadcast_game_state() -> void:
 		"current_player_index": game_manager.current_player_index,
 		"starting_player_index": game_manager.starting_player_index
 	}
-	if ProjectSettings.get_setting(DEBUG_SETTING_PATH, false):
-		print("🧾 Snapshot:", snapshot)
+	if ProjectSettings.get_setting(SNAPSHOT_LOG_SETTING_PATH, false):
+		_log("Snapshot: %s" % str(snapshot))
 	Game_State_Manager.send_game_state(snapshot)
 
 # Sync Countdown to start game (SERVER-AUTHORITATIVE)
 func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 	if flag:
-		print("💻 Server starting countdown to start game!")
+		var args := OS.get_cmdline_args()
+		if ProjectSettings.get_setting("debug/short_countdown", false) or args.has("--short-countdown"):
+			sec = 1.0
+		_log("Server starting countdown to start game! seconds=%s short_setting=%s args=%s" % [
+			str(sec),
+			str(ProjectSettings.get_setting("debug/short_countdown", false)),
+			str(args)
+		])
 		var seconds := sec
 		var end_unix := Time.get_unix_time_from_system() + seconds
 		# Broadcast exact end time to every client
@@ -170,34 +189,31 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 		# Schedule the scene change on the server
 		var t := get_tree().create_timer(float(seconds), false)
 		t.timeout.connect(func ():
-			print("💻 Countdown finished — ordering scene change")
+			_log("Countdown finished - ordering scene change")
 			start_game()
 			Game_State_Manager.send_change_scene(GAME_SCENE_PATH)
 		)
 	else:
-		print("💻 Server stopping countdown to start game!")
+		_log("Server stopping countdown to start game!")
 		# Optional: if you add a 'cancel' path, you can broadcast a stop here
 		Game_State_Manager.send_toggle_countdown(false)
 
-#Start the game with the current default rule set
+# Start the game with the current default rule set
 func start_game() -> void:
 	if game_manager == null:
-		printerr("GameManager not initialized; cannot start game.")
+		_log_err("GameManager not initialized; cannot start game.")
 		return
-	print("💻 Server loading players into game.")
+	_log("Server loading players into game.")
 	game_manager.load_players(players)
-	print("💻 Server starting game with default ruleset.")
+	_log("Server starting game with default ruleset.")
 	game_manager.start_game()
 	Game_State_Manager.send_round_update(game_manager.round_number, game_manager.get_player_name(game_manager.current_player_index))
 	_broadcast_game_state()
 
 # for testing: Create fake players and start countdown
 func create_fake_game() -> void:
-	#Create 5 fake players and set them to ready.
+	# Create 5 fake players and set them to ready.
 	for i in range(5):
-		register_player("Test Player " + str(i), i+10)
-		register_ready_flag(i+10, true)
+		register_player("Test Player " + str(i), i + 10)
+		register_ready_flag(i + 10, true)
 	_toggle_countdown(true, 1)
-
-
-		

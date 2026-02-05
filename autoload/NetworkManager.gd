@@ -1,11 +1,11 @@
-# NetworkManager.gd
+﻿# NetworkManager.gd
 # Facade to abstract away network setup from the rest of the game
 
 extends Node
 class_name NetworkManager
 
 # Holds the current network role handler (e.g., server, client, host)
-var handler: Node = null
+var handler = null
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -43,7 +43,7 @@ func join_server(address: String):
 @rpc("any_peer")
 func register_player(player_name: String, peer_id : int):
 	if handler is ServerHandler:
-		print("📨 Received username from client:", player_name)
+		print("Received username from client: %s" % player_name)
 		handler.register_player(player_name, peer_id)
 
 @rpc("any_peer")

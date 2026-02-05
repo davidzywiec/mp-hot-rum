@@ -1,14 +1,14 @@
-# GameStateManager.gd
+﻿# GameStateManager.gd
 extends Node
 class_name GameStateManager
 
 signal player_state_updated(players_data: Array)
 signal countdown_toggle(flag: bool)
-# NEW: precise end timestamp in unix seconds for synced countdowns
+# precise end timestamp in unix seconds for synced countdowns
 signal countdown_sync(end_unix: int)
 signal game_state_updated(state: Dictionary)
 
-const DEBUG_SETTING_PATH := "debug/network_debug"
+const SNAPSHOT_LOG_SETTING_PATH := "debug/snapshot_logs"
 
 var current_player : Player
 var latest_player_state: Array = []
@@ -46,7 +46,7 @@ func send_toggle_countdown(start_timer: bool) -> void:
 @rpc
 func receive_countdown(end_unix: int) -> void:
 	# Fired on all peers, including server
-	print("⏱ Received synced countdown end:", end_unix)
+	print("Received synced countdown end:", end_unix)
 	emit_signal("countdown_sync", end_unix)
 	# Also drive the existing boolean signal so legacy UI keeps working
 	emit_signal("countdown_toggle", true)
@@ -63,7 +63,7 @@ func send_countdown(end_unix: int) -> void:
 # ------------------------------
 @rpc
 func receive_change_scene(path: String) -> void:
-	print("🎬 Change scene requested:", path)
+	print("Change scene requested:", path)
 	# Let UI react (or change directly here if you prefer)
 	SignalManager.change_scene.emit(path)
 
@@ -74,7 +74,7 @@ func send_change_scene(path: String) -> void:
 # --- Host assignment sync ---
 @rpc
 func receive_host(new_host_peer_id: int) -> void:
-	print("👑 New host is:", new_host_peer_id)
+	print("New host is:", new_host_peer_id)
 	SignalManager.ready_to_start.emit(false) # default off; UI will recompute
 	# Let UI know so it can enable/disable Start for the right player
 	SignalManager.emit_signal("host_changed", new_host_peer_id)
@@ -86,7 +86,7 @@ func send_host(new_host_peer_id: int) -> void:
 ## --- Round Update Sync ---
 @rpc
 func receive_round_update(round: int, current_player_name: String) -> void:
-	print("🔄 Received round update: Round %d, Current Player: %s" % [round, current_player_name])
+	print("Received round update: Round %d, Current Player: %s" % [round, current_player_name])
 	SignalManager.round_updated.emit(round, current_player_name)
 
 func send_round_update(round: int, current_player_name: String) -> void:
@@ -101,7 +101,7 @@ func receive_game_state(state: Dictionary) -> void:
 	emit_signal("game_state_updated", state)
 
 func send_game_state(state: Dictionary) -> void:
-	if ProjectSettings.get_setting(DEBUG_SETTING_PATH, false):
-		print("📦 Sending game state snapshot:", state)
+	if ProjectSettings.get_setting(SNAPSHOT_LOG_SETTING_PATH, false):
+		print("Sending game state snapshot:", state)
 	rpc("receive_game_state", state)
 	emit_signal("game_state_updated", state)

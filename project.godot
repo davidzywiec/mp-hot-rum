@@ -1,4 +1,4 @@
-; Engine configuration file.
+﻿; Engine configuration file.
 ; It's best edited using the editor UI and not directly,
 ; since the parameters that go here are not all obvious.
 ;
@@ -25,10 +25,13 @@ Game_State_Manager="*res://autoload/GameStateManager.gd"
 DevOverlay="*res://autoload/DevOverlay.gd"
 
 [debug]
-
 network_debug=true
 dev_overlay=true
 ui_debug=true
+short_countdown=true
+network_logs=true
+game_logs=true
+snapshot_logs=false
 
 [display]
 
@@ -43,3 +46,6 @@ enabled=PackedStringArray("res://addons/server_runner/plugin.cfg")
 [rendering]
 
 renderer/rendering_method="mobile"
+
+
+

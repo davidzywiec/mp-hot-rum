@@ -1,9 +1,9 @@
-extends Node
+﻿extends Node
 
 var host_flag : bool = false
 var deck
 var ruleset : Ruleset
-#Player registries
+# Player registries
 var players = {} # key: peer_id, value: player_data
 var player_order : Array = [] # ordered list of peer_ids for turn management
 var player_hands : Dictionary = {} # key: peer_id, value: Array of Cards
@@ -11,7 +11,13 @@ var current_player_index : int = 0
 var starting_player_index : int = 0
 var round_number : int = 1
 
-const DEBUG_SETTING_PATH := "debug/network_debug"
+const GAME_LOG_SETTING_PATH := "debug/game_logs"
+const SNAPSHOT_LOG_SETTING_PATH := "debug/snapshot_logs"
+
+func _log_game(msg: String) -> void:
+	if not ProjectSettings.get_setting(GAME_LOG_SETTING_PATH, true):
+		return
+	print(msg)
 
 func _is_server_authority() -> bool:
 	return multiplayer.is_server() or OS.has_feature("server")
@@ -24,8 +30,7 @@ func _ready() -> void:
 			Game_State_Manager.game_state_updated.connect(apply_game_state)
 		return
 
-
-#Load ruleset from file
+# Load ruleset from file
 func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.json") -> void:
 	if not _is_server_authority():
 		return
@@ -35,34 +40,31 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 		ruleset = loaded_ruleset
 		create_deck(players.size())
 		SignalManager.round_updated.emit(round_number, get_player_name(starting_player_index))
-
 	else:
 		printerr("Error loading ruleset: %s" % ruleset_loader.last_error)
 
-
-#Create deck for the players based on player count
+# Create deck for the players based on player count
 func create_deck(players: int) -> void:
 	if not _is_server_authority():
 		return
 	deck = Deck.new(players)
-	print("Deck created for %d players." % players)
+	_log_game("Deck created for %d players." % players)
 
-#Create hand for each player based on the hand count for that round
+# Create hand for each player based on the hand count for that round
 func deal_hand(round: int) -> void:
 	if not _is_server_authority():
 		return
-	pass #TODO: deal hands to players at round start
+	pass # TODO: deal hands to players at round start
 
 func reset_hands() -> void:
 	if not _is_server_authority():
 		return
-	pass #TODO: reset player hands at round start
+	pass # TODO: reset player hands at round start
 
 func get_player_name(index: int) -> String:
 	var peer_id = player_order[index].peer_id
 	if players.has(peer_id):
 		return players[peer_id].name
-	
 	return "unknown"
 
 func load_players(player_data: Dictionary) -> void:
@@ -71,7 +73,7 @@ func load_players(player_data: Dictionary) -> void:
 	players = player_data
 	_rebuild_player_order()
 	for x in players.keys():
-		print("GameManager Loaded player: %s" % players[x].name)
+		_log_game("GameManager loaded player: %s" % players[x].name)
 
 func _rebuild_player_order() -> void:
 	player_order = []
@@ -85,19 +87,19 @@ func increment_starting_player() -> void:
 		return
 	starting_player_index = (starting_player_index + 1) % player_order.size()
 	current_player_index = starting_player_index
-	print("Starting player changed to index %d (%s)" % [starting_player_index, get_player_name(starting_player_index)])
+	_log_game("Starting player changed to index %d (%s)" % [starting_player_index, get_player_name(starting_player_index)])
 
 func advance_to_next_player() -> void:
 	if not _is_server_authority():
 		return
 	current_player_index = (current_player_index + 1) % player_order.size()
-	print("Current player advanced to index %d (%s)" % [current_player_index, get_player_name(current_player_index)])
+	_log_game("Current player advanced to index %d (%s)" % [current_player_index, get_player_name(current_player_index)])
 
 func advance_to_next_round() -> void:
 	if not _is_server_authority():
 		return
 	round_number += 1
-	print("Advancing to round %d" % round_number)
+	_log_game("Advancing to round %d" % round_number)
 	SignalManager.round_updated.emit(round_number, get_player_name(current_player_index))
 	reset_hands()
 	deal_hand(round_number)
@@ -133,5 +135,5 @@ func apply_game_state(state: Dictionary) -> void:
 	round_number = int(state.get("round_number", round_number))
 	current_player_index = int(state.get("current_player_index", current_player_index))
 	starting_player_index = int(state.get("starting_player_index", starting_player_index))
-	if ProjectSettings.get_setting(DEBUG_SETTING_PATH, false):
-		print("📥 Applied game state snapshot. Players:", players.size(), "Round:", round_number, "Current idx:", current_player_index)
+	if ProjectSettings.get_setting(SNAPSHOT_LOG_SETTING_PATH, false):
+		print("Applied game state snapshot. Players: %d Round: %d Current idx: %d" % [players.size(), round_number, current_player_index])

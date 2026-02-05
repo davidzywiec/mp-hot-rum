@@ -121,7 +121,10 @@ func toggle_countdown_timer(flag: bool) -> void:
 	if flag:
 		if not label_timer.get_parent():
 			add_child(label_timer)
-		label_timer.configure("Game starting in... ", 10.0) # will be overridden by _on_countdown_sync if broadcast arrives
+		var fallback := 10.0
+		if ProjectSettings.get_setting("debug/short_countdown", false):
+			fallback = 1.0
+		label_timer.configure("Game starting in... ", fallback) # will be overridden by _on_countdown_sync if broadcast arrives
 		label_timer.start_timer()
 		ready_btn.disabled = true
 		start_btn.disabled = true

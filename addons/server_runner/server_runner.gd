@@ -61,6 +61,8 @@ func _on_run_server_pressed() -> void:
 		"--path",
 		project_path
 	])
+	if ProjectSettings.get_setting("debug/short_countdown", false):
+		args.append("--short-countdown")
 	var pid := OS.create_process(exe, args)
 	if pid <= 0:
 		push_error("Failed to launch server process. Check editor executable path and permissions.")
