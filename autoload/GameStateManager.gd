@@ -6,6 +6,9 @@ signal player_state_updated(players_data: Array)
 signal countdown_toggle(flag: bool)
 # NEW: precise end timestamp in unix seconds for synced countdowns
 signal countdown_sync(end_unix: int)
+signal game_state_updated(state: Dictionary)
+
+const DEBUG_SETTING_PATH := "debug/network_debug"
 
 var current_player : Player
 var latest_player_state: Array = []
@@ -90,3 +93,15 @@ func send_round_update(round: int, current_player_name: String) -> void:
 	rpc("receive_round_update", round, current_player_name)
 	SignalManager.round_updated.emit(round, current_player_name)
 
+# ------------------------------
+# NEW: game state snapshot sync
+# ------------------------------
+@rpc
+func receive_game_state(state: Dictionary) -> void:
+	emit_signal("game_state_updated", state)
+
+func send_game_state(state: Dictionary) -> void:
+	if ProjectSettings.get_setting(DEBUG_SETTING_PATH, false):
+		print("📦 Sending game state snapshot:", state)
+	rpc("receive_game_state", state)
+	emit_signal("game_state_updated", state)

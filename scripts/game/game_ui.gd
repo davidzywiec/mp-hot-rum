@@ -5,8 +5,12 @@ extends Control
 
 func _ready() -> void:
 	SignalManager.round_updated.connect(update_round_ui)
-	pull_round_ui()
+	Game_State_Manager.game_state_updated.connect(_on_game_state_updated)
+	if multiplayer.is_server() or OS.has_feature("server"):
+		pull_round_ui()
 
+func _on_game_state_updated(_state: Dictionary) -> void:
+	pull_round_ui()
 
 func pull_round_ui() -> void:
 	var round = GameManager.round_number

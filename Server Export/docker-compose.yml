@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  hotrum-server:
+    build: .
+    image: hotrum-server
+    ports:
+      - "7000:7000/udp"
+    restart: unless-stopped

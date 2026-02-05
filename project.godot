@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="MP Hot Rum"
+config/version="0.001"
 run/main_scene="uid://btbg452ehv3cs"
 config/features=PackedStringArray("4.4", "Mobile")
 config/icon="uid://dl0yrrl8pp32i"
@@ -18,14 +19,26 @@ config/icon="uid://dl0yrrl8pp32i"
 [autoload]
 
 SignalManager="*res://autoload/SignalManager.gd"
+GameManager="*res://autoload/GameManager.gd"
 Network_Manager="*res://autoload/NetworkManager.gd"
 Game_State_Manager="*res://autoload/GameStateManager.gd"
+DevOverlay="*res://autoload/DevOverlay.gd"
+
+[debug]
+
+network_debug=true
+dev_overlay=true
+ui_debug=true
 
 [display]
 
 window/size/viewport_width=1040
 window/size/viewport_height=720
 window/stretch/mode="viewport"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/server_runner/plugin.cfg")
 
 [rendering]
 
