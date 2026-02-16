@@ -49,10 +49,10 @@ func build_deck() -> void:
 			add_card_to_bottom(Card.new(suit, number, points))
 			
 func deal_hand(card_count: int) -> Array[Card]:
-	
-	var hand : Array[Card] = Array()
-	
-	for x in range(card_count):
-		hand.append(draw_card())
-			
+	var hand: Array[Card] = []
+	for _i in range(card_count):
+		var card := draw_card()
+		if card == null:
+			break
+		hand.append(card)
 	return hand

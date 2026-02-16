@@ -207,8 +207,17 @@ func start_game() -> void:
 	game_manager.load_players(players)
 	_log("Server starting game with default ruleset.")
 	game_manager.start_game()
+	_send_private_hands()
 	Game_State_Manager.send_round_update(game_manager.round_number, game_manager.get_player_name(game_manager.current_player_index))
 	_broadcast_game_state()
+
+func _send_private_hands() -> void:
+	if game_manager == null:
+		return
+	for pid in players.keys():
+		var hand_data: Array = game_manager.serialize_hand_for_peer(pid)
+		_log("Sending private hand to peer %s with %d cards." % [str(pid), hand_data.size()])
+		Game_State_Manager.rpc_id(pid, "receive_private_hand", hand_data)
 
 # for testing: Create fake players and start countdown
 func create_fake_game() -> void:

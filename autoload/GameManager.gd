@@ -1,7 +1,7 @@
 ﻿extends Node
 
 var host_flag : bool = false
-var deck
+var deck : Deck
 var ruleset : Ruleset
 # Player registries
 var players = {} # key: peer_id, value: player_data
@@ -38,7 +38,9 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 	var loaded_ruleset := ruleset_loader.load_ruleset(ruleset_path)
 	if loaded_ruleset != null:
 		ruleset = loaded_ruleset
+		_apply_debug_start_round()
 		create_deck(players.size())
+		deal_hand(round_number)
 		SignalManager.round_updated.emit(round_number, get_player_name(starting_player_index))
 	else:
 		printerr("Error loading ruleset: %s" % ruleset_loader.last_error)
@@ -54,12 +56,21 @@ func create_deck(players: int) -> void:
 func deal_hand(round: int) -> void:
 	if not _is_server_authority():
 		return
-	pass # TODO: deal hands to players at round start
+	if deck == null:
+		return
+	player_hands.clear()
+	var deal_count := _deal_count_for_round(round)
+	if deal_count <= 0:
+		deal_count = 7
+	for pid in players.keys():
+		player_hands[pid] = deck.deal_hand(deal_count)
+		_log_game("Dealt hand to peer %s with %d cards." % [str(pid), player_hands[pid].size()])
+	_log_game("Dealt %d cards to %d players." % [deal_count, players.size()])
 
 func reset_hands() -> void:
 	if not _is_server_authority():
 		return
-	pass # TODO: reset player hands at round start
+	player_hands.clear()
 
 func get_player_name(index: int) -> String:
 	var peer_id = player_order[index].peer_id
@@ -81,6 +92,25 @@ func _rebuild_player_order() -> void:
 	ids.sort()
 	for pid in ids:
 		player_order.append(players[pid])
+
+func _deal_count_for_round(round: int) -> int:
+	if ruleset == null:
+		return 7
+	var req = ruleset.get_round(round)
+	if req == null:
+		return 7
+	var count := int(req.deal_count)
+	return 7 if count <= 0 else count
+
+func _apply_debug_start_round() -> void:
+	var configured_round := int(ProjectSettings.get_setting("debug/start_round", 1))
+	var max_rounds := int(ruleset.max_rounds) if ruleset != null else 1
+	if max_rounds <= 0:
+		max_rounds = 1
+	round_number = clamp(configured_round, 1, max_rounds)
+	current_player_index = 0
+	starting_player_index = 0
+	_log_game("Starting game at round %d (debug/start_round=%d)." % [round_number, configured_round])
 
 func increment_starting_player() -> void:
 	if not _is_server_authority():
@@ -137,3 +167,30 @@ func apply_game_state(state: Dictionary) -> void:
 	starting_player_index = int(state.get("starting_player_index", starting_player_index))
 	if ProjectSettings.get_setting(SNAPSHOT_LOG_SETTING_PATH, false):
 		print("Applied game state snapshot. Players: %d Round: %d Current idx: %d" % [players.size(), round_number, current_player_index])
+
+func serialize_hand_for_peer(peer_id: int) -> Array:
+	var result: Array = []
+	var key = peer_id
+	if not player_hands.has(key):
+		for existing_key in player_hands.keys():
+			if int(existing_key) == int(peer_id):
+				key = existing_key
+				break
+	if not player_hands.has(key):
+		_log_game("No private hand found for peer %s. Known keys: %s" % [str(peer_id), str(player_hands.keys())])
+		return result
+	for card in player_hands[key]:
+		if card is Card:
+			result.append(card.to_dict())
+	return result
+
+func apply_private_hand(cards_data: Array) -> void:
+	if _is_server_authority():
+		return
+	var my_peer_id := multiplayer.get_unique_id()
+	var cards: Array = []
+	for c in cards_data:
+		if typeof(c) == TYPE_DICTIONARY:
+			cards.append(Card.from_dict(c))
+	player_hands[my_peer_id] = cards
+	print("Client peer %s received private hand with %d cards." % [str(my_peer_id), cards.size()])

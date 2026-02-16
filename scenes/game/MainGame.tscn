@@ -20,7 +20,7 @@ grow_vertical = 2
 text = "PLACE HOLDER GAME"
 
 [node name="Deck" type="Sprite2D" parent="."]
-position = Vector2(72, 81)
+position = Vector2(466, 447)
 texture = ExtResource("1_a0tey")
 
 [node name="UI" type="Control" parent="."]
