@@ -2,7 +2,7 @@
 extends Resource
 class_name Player
 
-var peer_id
+var peer_id: int = 0
 var name: String
 var ready: bool = false
 var cards : Array = [] # could later be changed to Array[Card]

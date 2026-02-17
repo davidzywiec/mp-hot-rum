@@ -1,0 +1,56 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/card_view.gd" id="1_h8f6n"]
+
+[node name="CardView" type="PanelContainer"]
+custom_minimum_size = Vector2(92, 132)
+script = ExtResource("1_h8f6n")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="VB" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TopRow" type="HBoxContainer" parent="Margin/VB"]
+layout_mode = 2
+
+[node name="RankTop" type="Label" parent="Margin/VB/TopRow"]
+layout_mode = 2
+text = "A"
+
+[node name="TopSpacer" type="Control" parent="Margin/VB/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SuitTop" type="Label" parent="Margin/VB/TopRow"]
+layout_mode = 2
+text = "H"
+
+[node name="Center" type="Label" parent="Margin/VB"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "A H"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BottomRow" type="HBoxContainer" parent="Margin/VB"]
+layout_mode = 2
+
+[node name="BottomSpacer" type="Control" parent="Margin/VB/BottomRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SuitBottom" type="Label" parent="Margin/VB/BottomRow"]
+layout_mode = 2
+text = "H"
+
+[node name="RankBottom" type="Label" parent="Margin/VB/BottomRow"]
+layout_mode = 2
+text = "A"

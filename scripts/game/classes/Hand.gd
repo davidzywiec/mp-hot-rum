@@ -31,7 +31,7 @@ func sort_by_number_then_suit() -> void:
 	)
 
 func get_total_points() -> int:
-	var total := 0
+	var total: int = 0
 	for card in cards:
 		total += card.point_value
 	return total

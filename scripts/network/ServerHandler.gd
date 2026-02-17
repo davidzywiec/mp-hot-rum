@@ -4,10 +4,10 @@
 extends Node
 class_name ServerHandler
 
-const PORT = 7000
-const MAX_CONNECTIONS = 6
-const NETWORK_LOG_SETTING_PATH := "debug/network_logs"
-const SNAPSHOT_LOG_SETTING_PATH := "debug/snapshot_logs"
+const PORT: int = 7000
+const MAX_CONNECTIONS: int = 6
+const NETWORK_LOG_SETTING_PATH: String = "debug/network_logs"
+const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 
 # Timestamped logging for server output.
 func _ts() -> String:
@@ -24,19 +24,19 @@ func _log_err(msg: String) -> void:
 	printerr("[%s] %s" % [_ts(), msg])
 
 # Player registry and ready-tracking
-var players := {} # key: player_name, value: Player
-var ready_players := {}
-var game_manager = null
+var players: Dictionary = {} # key: player_name, value: Player
+var ready_players: Dictionary = {}
+var game_manager: Node = null
 
 # TODO: point this at your actual game scene when its added
-const GAME_SCENE_PATH := "res://scenes/game/MainGame.tscn"
+const GAME_SCENE_PATH: String = "res://scenes/game/MainGame.tscn"
 
 # Initializes the server and sets it as the active multiplayer peer
 func start():
-	var peer = ENetMultiplayerPeer.new()
+	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 
 	# Attempt to bind server on the given port with max allowed clients
-	var error = peer.create_server(PORT, MAX_CONNECTIONS)
+	var error: int = peer.create_server(PORT, MAX_CONNECTIONS)
 
 	# Check if there was an error during setup
 	if error != OK:
@@ -71,7 +71,7 @@ func register_player(new_player_info: String, peer_id: int) -> void:
 	_log("Server registering: %s" % new_player_info)
 
 	if not players.has(peer_id):
-		var player = Player.new()
+		var player: Player = Player.new()
 		player.peer_id = peer_id
 		player.name = new_player_info
 		players[peer_id] = player
@@ -109,7 +109,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func _current_host_peer_id() -> int:
 	# First player == lowest connected peer_id
-	var ids := []
+	var ids: Array = []
 	# Prefer authoritative list; use the registries you maintain
 	for pid in players.keys():
 		ids.append(pid)
@@ -120,7 +120,7 @@ func _current_host_peer_id() -> int:
 		return -1
 
 func _broadcast_host_if_changed() -> void:
-	var host := _current_host_peer_id()
+	var host: int = _current_host_peer_id()
 	if host == -1:
 		return
 	Game_State_Manager.send_host(host)
@@ -160,7 +160,7 @@ func _broadcast_game_state() -> void:
 				order_ids.append(p.peer_id)
 			elif typeof(p) == TYPE_DICTIONARY and p.has("peer_id"):
 				order_ids.append(p["peer_id"])
-	var snapshot := {
+	var snapshot: Dictionary = {
 		"players": state_players,
 		"player_order_ids": order_ids,
 		"round_number": game_manager.round_number,
@@ -174,7 +174,7 @@ func _broadcast_game_state() -> void:
 # Sync Countdown to start game (SERVER-AUTHORITATIVE)
 func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 	if flag:
-		var args := OS.get_cmdline_args()
+		var args: PackedStringArray = OS.get_cmdline_args()
 		if ProjectSettings.get_setting("debug/short_countdown", false) or args.has("--short-countdown"):
 			sec = 1.0
 		_log("Server starting countdown to start game! seconds=%s short_setting=%s args=%s" % [
@@ -182,12 +182,12 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 			str(ProjectSettings.get_setting("debug/short_countdown", false)),
 			str(args)
 		])
-		var seconds := sec
-		var end_unix := Time.get_unix_time_from_system() + seconds
+		var seconds: float = sec
+		var end_unix: int = int(Time.get_unix_time_from_system() + seconds)
 		# Broadcast exact end time to every client
 		Game_State_Manager.send_countdown(end_unix)
 		# Schedule the scene change on the server
-		var t := get_tree().create_timer(float(seconds), false)
+		var t: SceneTreeTimer = get_tree().create_timer(float(seconds), false)
 		t.timeout.connect(func ():
 			_log("Countdown finished - ordering scene change")
 			start_game()
@@ -218,6 +218,80 @@ func _send_private_hands() -> void:
 		var hand_data: Array = game_manager.serialize_hand_for_peer(pid)
 		_log("Sending private hand to peer %s with %d cards." % [str(pid), hand_data.size()])
 		Game_State_Manager.rpc_id(pid, "receive_private_hand", hand_data)
+
+func register_hand_reorder(peer_id: int, cards_data: Array) -> void:
+	if game_manager == null:
+		_bind_game_manager()
+	if game_manager == null:
+		_log_err("Ignoring hand reorder from %s: GameManager unavailable." % str(peer_id))
+		return
+	if not players.has(peer_id):
+		_log_err("Ignoring hand reorder from unknown peer %s." % str(peer_id))
+		return
+	if not game_manager.player_hands.has(peer_id):
+		_log_err("Ignoring hand reorder from peer %s: no authoritative hand." % str(peer_id))
+		return
+
+	var existing_hand: Array = game_manager.player_hands[peer_id]
+	if cards_data.size() != existing_hand.size():
+		_log_err("Rejecting hand reorder from peer %s: card count mismatch %d != %d." % [
+			str(peer_id), cards_data.size(), existing_hand.size()
+		])
+		return
+
+	var existing_counts: Dictionary = _build_signature_counts_from_cards(existing_hand)
+	var incoming_cards: Array[Card] = []
+	var incoming_counts: Dictionary = _build_signature_counts_from_dicts(cards_data, incoming_cards)
+	if incoming_counts.is_empty() and cards_data.size() > 0:
+		_log_err("Rejecting hand reorder from peer %s: malformed payload." % str(peer_id))
+		return
+	if not _signature_counts_equal(existing_counts, incoming_counts):
+		_log_err("Rejecting hand reorder from peer %s: card identity mismatch." % str(peer_id))
+		return
+
+	game_manager.player_hands[peer_id] = incoming_cards
+	_log("Applied hand reorder from peer %s." % str(peer_id))
+
+	# Echo back authoritative order to keep client state in sync.
+	var hand_data: Array = game_manager.serialize_hand_for_peer(peer_id)
+	Game_State_Manager.rpc_id(peer_id, "receive_private_hand", hand_data)
+
+func _build_signature_counts_from_cards(cards: Array) -> Dictionary:
+	var counts: Dictionary = {}
+	for entry in cards:
+		if not (entry is Card):
+			continue
+		var card: Card = entry as Card
+		_increment_signature_count(counts, _card_signature(card.suit, card.number, card.point_value))
+	return counts
+
+func _build_signature_counts_from_dicts(cards_data: Array, out_cards: Array[Card]) -> Dictionary:
+	var counts: Dictionary = {}
+	for raw in cards_data:
+		if typeof(raw) != TYPE_DICTIONARY:
+			return {}
+		var card_dict: Dictionary = raw
+		var card: Card = Card.from_dict(card_dict)
+		out_cards.append(card)
+		_increment_signature_count(counts, _card_signature(card.suit, card.number, card.point_value))
+	return counts
+
+func _signature_counts_equal(a: Dictionary, b: Dictionary) -> bool:
+	if a.size() != b.size():
+		return false
+	for key in a.keys():
+		if not b.has(key):
+			return false
+		if int(a[key]) != int(b[key]):
+			return false
+	return true
+
+func _increment_signature_count(counts: Dictionary, signature: String) -> void:
+	var current: int = int(counts.get(signature, 0))
+	counts[signature] = current + 1
+
+func _card_signature(suit: int, number: int, point_value: int) -> String:
+	return "%d|%d|%d" % [suit, number, point_value]
 
 # for testing: Create fake players and start countdown
 func create_fake_game() -> void:

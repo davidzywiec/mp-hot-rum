@@ -1,7 +1,7 @@
 extends Node
 
-const PORT = 7000
-const MAX_CONNECTIONS = 6
+const PORT: int = 7000
+const MAX_CONNECTIONS: int = 6
 
 enum LobbyState {
 	WAITING_FOR_PLAYERS,
@@ -10,12 +10,12 @@ enum LobbyState {
 	CANCEL_START,
 	STARTING_GAME
 }
-var state = LobbyState.WAITING_FOR_PLAYERS
+var state: int = LobbyState.WAITING_FOR_PLAYERS
 
 #Player registries
-var players = {} # key: peer_id, value: player_data
+var players: Dictionary = {} # key: peer_id, value: player_data
 #Players ready
-var ready_players = {}
+var ready_players: Dictionary = {}
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(player_connected)
@@ -32,14 +32,14 @@ func _ready() -> void:
 ## This sets up the host to accept incoming player connections.
 func start_server():
 	# Create a new ENet peer to act as the server
-	var peer = ENetMultiplayerPeer.new()
+	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 	
 	# Attempt to create the server with specified port and max connections.
 	# The last three zeroes are for:
 	# - In-bandwidth (0 = unlimited)
 	# - Out-bandwidth (0 = unlimited)
 	# - Channel count (0 = default)
-	var error = peer.create_server(PORT, MAX_CONNECTIONS, 0, 0, 0)
+	var error: int = peer.create_server(PORT, MAX_CONNECTIONS, 0, 0, 0)
 	
 	# If there's an error creating the server, return it (non-zero means failure)
 	if error:
@@ -49,17 +49,17 @@ func start_server():
 	multiplayer.multiplayer_peer = peer
 
 ##Joins the game server using ENet for mulitplayer networking.
-func join_server(address):
-	var peer = ENetMultiplayerPeer.new()
-	var error = peer.create_client(address, PORT)
+func join_server(address: String):
+	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
+	var error: int = peer.create_client(address, PORT)
 	if error:
 		SignalManager.failed_connection.emit()
 		return
 		
 	multiplayer.multiplayer_peer = peer
 
-func player_connected(user_id) -> void:
-	var peer_id = multiplayer.get_unique_id()
+func player_connected(user_id: int) -> void:
+	var peer_id: int = multiplayer.get_unique_id()
 	#If server receiving player connected register the user.
 	if peer_id == 1:
 		register_player(user_id)
@@ -67,7 +67,7 @@ func player_connected(user_id) -> void:
 		SignalManager.player_connected.emit(user_id)
 
 
-func register_player(new_player_info) -> void:
+func register_player(new_player_info: Variant) -> void:
 	if !players.has(new_player_info):
 		players[new_player_info] = {
 			"Name" : new_player_info,
@@ -78,7 +78,7 @@ func register_player(new_player_info) -> void:
 	sync_lobby_data_to_all()
 
 
-func player_disconnected(user_id) -> void:
+func player_disconnected(user_id: int) -> void:
 	players.erase(user_id)
 	SignalManager.player_disconnected.emit(user_id)
 	print("Player disconnected %s" % str(user_id))
@@ -119,12 +119,12 @@ func receive_lobby_data(new_lobby_players, new_state):
 
 func register_username(username: String) -> void:
 	#Register Player Username with server
-	var peer_id = multiplayer.get_unique_id()
+	var peer_id: int = multiplayer.get_unique_id()
 	rpc_id(1, "register_username_with_server", peer_id, username)
 
 func register_ready_flag(ready: bool) -> void:
 	#Register Player Username with server
-	var peer_id = multiplayer.get_unique_id()
+	var peer_id: int = multiplayer.get_unique_id()
 	rpc_id(1, "register_ready_with_server", peer_id, ready)
 
 @rpc("any_peer")
@@ -151,7 +151,7 @@ func register_ready_with_server(id: int, ready: bool) -> void:
 	SignalManager.refresh_lobby.emit()
 
 func check_all_ready() -> bool:
-	var all_ready = true
+	var all_ready: bool = true
 	if players.size() < 3:
 		return false
 	for player in players.values():

@@ -1,23 +1,23 @@
 extends Control
 
 @onready
-var player_container = $GridContainer
+var player_container: GridContainer = $GridContainer
 @onready
-var player_card = preload("res://scenes/lobby/player_card.tscn")
+var player_card: PackedScene = preload("res://scenes/lobby/player_card.tscn")
 @onready
-var ready_btn = $VBC/ReadyButton
+var ready_btn: Button = $VBC/ReadyButton
 @onready
-var start_btn = $VBC/StartButton
+var start_btn: Button = $VBC/StartButton
 @onready
-var fake_btn = $VBC/OVERRIDE_START_BT
+var fake_btn: Button = $VBC/OVERRIDE_START_BT
 
 
-var label_timer_scene = preload("res://scenes/utility/CountdownLabelTimer.tscn")
-var label_timer = label_timer_scene.instantiate()
+var label_timer_scene: PackedScene = preload("res://scenes/utility/CountdownLabelTimer.tscn")
+var label_timer: Node = label_timer_scene.instantiate()
 var ready_status: bool = false
-var is_host := false
+var is_host: bool = false
 
-var countdown_connection_done := false
+var countdown_connection_done: bool = false
 @export var next_scene_fallback: String = "res://scenes/menu/main_menu.tscn" # used only if server sends same
 
 
@@ -46,7 +46,7 @@ func set_ready_flag() -> void:
 	ready_status = !ready_status
 	SignalManager.player_ready.emit(ready_status)
 	if Network_Manager.handler is ClientHandler:
-		var peer_id = multiplayer.get_unique_id()
+		var peer_id: int = multiplayer.get_unique_id()
 		Network_Manager.handler.broadcast_ready_flag(peer_id, ready_status)
 	
 func set_ready_connection(card: PlayerCard) -> void:
@@ -79,8 +79,8 @@ func update_lobby_ui(players_data: Array) -> void:
 
 	# Add players and check host/ready status
 	for i in range(players_data.size()):
-		var player_info = players_data[i]
-		var card = player_card.instantiate()
+		var player_info: Variant = players_data[i]
+		var card: PlayerCard = player_card.instantiate() as PlayerCard
 		player_container.add_child(card)
 		card.set_username(player_info.name)
 		card.set_ready(player_info.ready)
@@ -98,16 +98,14 @@ func update_lobby_ui(players_data: Array) -> void:
 
 func start_game() -> void:
 	SignalManager.toggle_game_countdown.emit(true)
-	if Network_Manager.handler is ClientHandler:
-		var peer_id = multiplayer.get_unique_id()
 	# NetworkManager facade already forwards to the server:
 	Network_Manager.rpc_id(1, "register_countdown", multiplayer.get_unique_id(), true)
 
 # NEW: receives absolute end timestamp from server
 func _on_countdown_sync(end_unix: int) -> void:
 	# Compute remaining seconds from local system clock
-	var now := Time.get_unix_time_from_system()
-	var remaining : float = max(0, end_unix - now)
+	var now: float = Time.get_unix_time_from_system()
+	var remaining : float = maxf(0.0, float(end_unix) - now)
 	if remaining <= 0:
 		return
 	# (Re)configure and start your label timer with precise remaining time
@@ -121,7 +119,7 @@ func toggle_countdown_timer(flag: bool) -> void:
 	if flag:
 		if not label_timer.get_parent():
 			add_child(label_timer)
-		var fallback := 10.0
+		var fallback: float = 10.0
 		if ProjectSettings.get_setting("debug/short_countdown", false):
 			fallback = 1.0
 		label_timer.configure("Game starting in... ", fallback) # will be overridden by _on_countdown_sync if broadcast arrives
@@ -137,12 +135,12 @@ func toggle_countdown_timer(flag: bool) -> void:
 
 # NEW: react to server-ordered scene change
 func _on_change_scene(path: String) -> void:
-	var target := path if path != "" else next_scene_fallback
+	var target: String = path if path != "" else next_scene_fallback
 	print("🎬 Changing scene to: ", target)
 	get_tree().change_scene_to_file(target)
 
 func _on_host_changed(host_peer_id: int) -> void:
-	var me := multiplayer.get_unique_id()
+	var me: int = multiplayer.get_unique_id()
 	is_host = (me == host_peer_id)
 	
 func start_fake_game() -> void:

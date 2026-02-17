@@ -11,13 +11,13 @@ func load_ruleset(path: String) -> Ruleset:
 		last_error = "Ruleset file not found: %s" % path
 		return null
 	# Open the file for reading.
-	var file := FileAccess.open(path, FileAccess.READ)
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		last_error = "Failed to open ruleset file: %s" % path
 		return null
 	# Read the full file and parse JSON.
-	var text := file.get_as_text()
-	var data = JSON.parse_string(text)
+	var text: String = file.get_as_text()
+	var data: Variant = JSON.parse_string(text)
 	# Expect a JSON dictionary at the top level.
 	if data == null or typeof(data) != TYPE_DICTIONARY:
 		last_error = "Invalid JSON in ruleset file: %s" % path
@@ -27,7 +27,7 @@ func load_ruleset(path: String) -> Ruleset:
 
 func _build_ruleset_from_dict(data: Dictionary) -> Ruleset:
 	# Create the Ruleset instance and fill in metadata.
-	var ruleset := Ruleset.new()
+	var ruleset: Ruleset = Ruleset.new()
 	ruleset.id = data.get("id", "default_ruleset")
 	ruleset.name = data.get("name", "Default Ruleset")
 	ruleset.description = data.get("description", "A standard ruleset for hot rum.")
@@ -36,7 +36,7 @@ func _build_ruleset_from_dict(data: Dictionary) -> Ruleset:
 	ruleset.round_requirements.clear()
 
 	# Pull the per-round requirements list from the JSON.
-	var rounds = data.get("rounds", [])
+	var rounds: Array = data.get("rounds", [])
 	if typeof(rounds) != TYPE_ARRAY:
 		last_error = "Ruleset JSON missing 'rounds' array."
 		return null
@@ -46,7 +46,7 @@ func _build_ruleset_from_dict(data: Dictionary) -> Ruleset:
 		# Skip any non-dictionary entries to avoid crashes.
 		if typeof(round_data) != TYPE_DICTIONARY:
 			continue
-		var req := RoundRequirement.new()
+		var req: RoundRequirement = RoundRequirement.new()
 		# Map JSON fields onto the requirement object.
 		req.game_round = int(round_data.get("round", 0))
 		req.deal_count = int(round_data.get("deal_count", 0))

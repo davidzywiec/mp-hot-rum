@@ -48,10 +48,10 @@ func _exit_tree() -> void:
 		_status_timer = null
 
 func _on_run_server_pressed() -> void:
-	var exe := OS.get_executable_path()
-	var project_path := ProjectSettings.globalize_path("res://")
-	var log_path := ProjectSettings.globalize_path("user://server.log")
-	var args := PackedStringArray([
+	var exe: String = OS.get_executable_path()
+	var project_path: String = ProjectSettings.globalize_path("res://")
+	var log_path: String = ProjectSettings.globalize_path("user://server.log")
+	var args: PackedStringArray = PackedStringArray([
 		"--headless",
 		"--audio-driver",
 		"Dummy",
@@ -63,7 +63,7 @@ func _on_run_server_pressed() -> void:
 	])
 	if ProjectSettings.get_setting("debug/short_countdown", false):
 		args.append("--short-countdown")
-	var pid := OS.create_process(exe, args)
+	var pid: int = OS.create_process(exe, args)
 	if pid <= 0:
 		push_error("Failed to launch server process. Check editor executable path and permissions.")
 	else:
@@ -85,5 +85,5 @@ func _on_stop_server_pressed() -> void:
 func _refresh_status() -> void:
 	if _status_label == null:
 		return
-	var running := _server_pid > 0 and OS.is_process_running(_server_pid)
+	var running: bool = _server_pid > 0 and OS.is_process_running(_server_pid)
 	_status_label.text = "Server: running" if running else "Server: stopped"

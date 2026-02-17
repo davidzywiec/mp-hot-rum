@@ -9,7 +9,7 @@ signal countdown_sync(end_unix: int)
 signal game_state_updated(state: Dictionary)
 signal private_hand_updated(cards: Array)
 
-const SNAPSHOT_LOG_SETTING_PATH := "debug/snapshot_logs"
+const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 
 var current_player : Player
 var latest_player_state: Array = []

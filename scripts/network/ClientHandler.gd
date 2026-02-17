@@ -4,12 +4,12 @@
 extends Node
 class_name ClientHandler
 
-const PORT = 7000
+const PORT: int = 7000
 
 # Start a connection to a server at the given address
 func start(address: String):
-	var peer = ENetMultiplayerPeer.new()
-	var error = peer.create_client(address, PORT)
+	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
+	var error: int = peer.create_client(address, PORT)
 
 	if error != OK:
 		print("❌ Failed to connect to server. Error code:", error)

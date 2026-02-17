@@ -1,7 +1,7 @@
 @tool
 extends Node
 
-const DEBUG_SETTING_PATH := "debug/dev_overlay"
+const DEBUG_SETTING_PATH: String = "debug/dev_overlay"
 
 var _layer: CanvasLayer
 var _label: Label
@@ -45,13 +45,13 @@ func _setup_overlay() -> void:
 func _refresh() -> void:
 	if _label == null:
 		return
-	var tree := get_tree()
-	var scene_name := "<none>"
+	var tree: SceneTree = get_tree()
+	var scene_name: String = "<none>"
 	if tree.current_scene != null:
 		scene_name = tree.current_scene.name
-	var peer_id := multiplayer.get_unique_id()
-	var peers := multiplayer.get_peers()
-	var is_server := multiplayer.is_server() or OS.has_feature("server")
+	var peer_id: int = multiplayer.get_unique_id()
+	var peers: PackedInt32Array = multiplayer.get_peers()
+	var is_server: bool = multiplayer.is_server() or OS.has_feature("server")
 	_label.text = "Dev Overlay\nScene: %s\nPeer: %s\nPeers: %s\nServer: %s" % [
 		scene_name,
 		str(peer_id),

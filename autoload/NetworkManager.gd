@@ -5,12 +5,12 @@ extends Node
 class_name NetworkManager
 
 # Holds the current network role handler (e.g., server, client, host)
-var handler = null
+var handler: Node = null
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	var args := OS.get_cmdline_args()
+	var args: PackedStringArray = OS.get_cmdline_args()
 	if args.has("--server"):
 		call_deferred("_boot_dedicated_server")
 	elif args.has("--client"):
@@ -18,8 +18,8 @@ func _ready() -> void:
 		return
 
 func _boot_dedicated_server() -> void:
-	var server_scene := "res://scenes/server/DedicatedServer.tscn"
-	var tree := get_tree()
+	var server_scene: String = "res://scenes/server/DedicatedServer.tscn"
+	var tree: SceneTree = get_tree()
 	if tree.current_scene != null and tree.current_scene.scene_file_path == server_scene:
 		return
 	tree.change_scene_to_file(server_scene)
@@ -55,6 +55,12 @@ func register_ready_flag(peer_id: int, ready_flag: bool):
 func register_countdown(peer_id: int, flag: bool, countdown_time: int = 10):
 	if handler is ServerHandler:
 		handler._toggle_countdown(flag, countdown_time)
+
+@rpc("any_peer")
+func register_hand_reorder(cards_data: Array) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_hand_reorder(sender_peer_id, cards_data)
 
 func is_server() -> bool:
 	return handler is ServerHandler

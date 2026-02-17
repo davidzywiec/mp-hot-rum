@@ -39,8 +39,8 @@ func start_server():
 
 # --- Called when the Join button is pressed ---
 func join_server():
-	var ip = ip_line_edit.text.strip_edges()
-	var username = username_line_edit.text.strip_edges()
+	var ip: String = ip_line_edit.text.strip_edges()
+	var username: String = username_line_edit.text.strip_edges()
 
 	# Validate input before trying to connect
 	if ip and username:
