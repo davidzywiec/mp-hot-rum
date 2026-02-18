@@ -62,5 +62,41 @@ func register_hand_reorder(cards_data: Array) -> void:
 		var sender_peer_id: int = multiplayer.get_remote_sender_id()
 		handler.register_hand_reorder(sender_peer_id, cards_data)
 
+@rpc("any_peer")
+func register_end_turn() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_end_turn(sender_peer_id)
+
+@rpc("any_peer")
+func register_draw_from_deck() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_draw_from_deck(sender_peer_id)
+
+@rpc("any_peer")
+func register_take_from_pile() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_take_from_pile(sender_peer_id)
+
+@rpc("any_peer")
+func register_discard_card(card_data: Dictionary) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_discard_card(sender_peer_id, card_data)
+
+@rpc("any_peer")
+func register_pass_pile() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_pass_pile(sender_peer_id)
+
+@rpc("any_peer")
+func register_claim_pile() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_claim_pile(sender_peer_id)
+
 func is_server() -> bool:
 	return handler is ServerHandler
