@@ -105,6 +105,9 @@ func register_end_turn(peer_id: int) -> void:
 	if game_manager == null:
 		_log_err("Ignoring end turn from %s: GameManager unavailable." % str(peer_id))
 		return
+	if game_manager.game_over:
+		_log("Ignoring end turn from %s: game is already over." % str(peer_id))
+		return
 	if not players.has(peer_id):
 		_log_err("Ignoring end turn from unknown peer %s." % str(peer_id))
 		return
@@ -258,14 +261,7 @@ func register_put_down(peer_id: int, cards_data: Array) -> void:
 
 		var remaining_cards: int = game_manager.get_hand_size_for_peer(peer_id)
 		if remaining_cards <= 0:
-			_log("Peer %s put down their final cards. Round is over." % str(peer_id))
-			game_manager.advance_to_next_round()
-			_send_private_hands()
-			Game_State_Manager.send_round_update(
-				game_manager.round_number,
-				game_manager.get_player_name(game_manager.current_player_index)
-			)
-			_broadcast_game_state()
+			_handle_round_finished(peer_id, "Peer %s put down their final cards. Round is over." % str(peer_id))
 			return
 
 	var staged_size: int = game_manager.get_put_down_buffer_size_for_peer(peer_id)
@@ -337,14 +333,7 @@ func register_add_to_meld(peer_id: int, meld_id: int, card_data: Dictionary) -> 
 
 	var remaining_cards: int = game_manager.get_hand_size_for_peer(peer_id)
 	if remaining_cards <= 0:
-		_log("Peer %s played their final card by adding to meld %d. Round is over." % [str(peer_id), meld_id])
-		game_manager.advance_to_next_round()
-		_send_private_hands()
-		Game_State_Manager.send_round_update(
-			game_manager.round_number,
-			game_manager.get_player_name(game_manager.current_player_index)
-		)
-		_broadcast_game_state()
+		_handle_round_finished(peer_id, "Peer %s played their final card by adding to meld %d. Round is over." % [str(peer_id), meld_id])
 		return
 
 	_log("Peer %s added a card to meld %d." % [str(peer_id), meld_id])
@@ -384,14 +373,7 @@ func register_discard_card(peer_id: int, card_data: Dictionary) -> void:
 
 	var remaining_cards: int = game_manager.get_hand_size_for_peer(peer_id)
 	if remaining_cards <= 0:
-		_log("Peer %s discarded their final card %s. Round is over." % [str(peer_id), str(discarded_card)])
-		game_manager.advance_to_next_round()
-		_send_private_hands()
-		Game_State_Manager.send_round_update(
-			game_manager.round_number,
-			game_manager.get_player_name(game_manager.current_player_index)
-		)
-		_broadcast_game_state()
+		_handle_round_finished(peer_id, "Peer %s discarded their final card %s. Round is over." % [str(peer_id), str(discarded_card)])
 		return
 
 	_broadcast_game_state()
@@ -563,7 +545,11 @@ func _broadcast_game_state() -> void:
 		"put_down_player_ids": game_manager.get_put_down_player_ids(),
 		"put_down_progress": game_manager.get_put_down_progress_snapshot(),
 		"public_melds": game_manager.serialize_public_melds(),
-		"round_requirement": game_manager.serialize_current_round_requirement()
+		"round_requirement": game_manager.serialize_current_round_requirement(),
+		"score_sheet": game_manager.get_score_sheet_data(),
+		"latest_round_score": game_manager.get_latest_round_score_data(),
+		"game_over": game_manager.game_over,
+		"winner_peer_ids": game_manager.get_winning_peer_ids()
 	}
 	if TURN_DEBUG:
 		_log("[TURN_DEBUG][SERVER][snapshot] round=%d current_idx=%d current_peer=%s order_ids=%s" % [
@@ -647,6 +633,65 @@ func _reject_put_down(peer_id: int, reason: String) -> void:
 	_log("Put-down rejected for %s: %s" % [str(peer_id), reason])
 	Game_State_Manager.send_put_down_error(peer_id, reason)
 
+func _handle_round_finished(finishing_peer_id: int, finish_message: String) -> void:
+	if game_manager == null:
+		return
+	_log(finish_message)
+	var completion: Dictionary = game_manager.complete_current_round(finishing_peer_id)
+	var completed_round: int = int(completion.get("completed_round", game_manager.round_number))
+	var max_rounds: int = int(completion.get("max_rounds", game_manager.get_max_rounds()))
+	var round_score: Dictionary = completion.get("round_score", {})
+	var game_finished: bool = bool(completion.get("game_over", game_manager.game_over))
+	var score_log: String = _format_round_score_log(round_score, completed_round)
+	if not score_log.is_empty():
+		_log(score_log)
+	if game_finished:
+		var winner_ids: Array = game_manager.get_winning_peer_ids()
+		var winner_names: String = _winner_names_text(winner_ids)
+		_log("Game complete at round %d/%d. Winner(s): %s" % [completed_round, max_rounds, winner_names])
+		Game_State_Manager.send_round_update(game_manager.round_number, "Game Over: %s" % winner_names)
+		_broadcast_game_state()
+		return
+	_send_private_hands()
+	Game_State_Manager.send_round_update(
+		game_manager.round_number,
+		game_manager.get_player_name(game_manager.current_player_index)
+	)
+	_broadcast_game_state()
+
+func _format_round_score_log(round_score: Dictionary, fallback_round: int) -> String:
+	if round_score.is_empty():
+		return ""
+	var round_number: int = int(round_score.get("round", fallback_round))
+	var rows_raw: Variant = round_score.get("rows", [])
+	if typeof(rows_raw) != TYPE_ARRAY:
+		return ""
+	var parts: Array[String] = []
+	var rows: Array = rows_raw
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = raw_row
+		parts.append("%s +%d (total=%d)" % [
+			str(row.get("name", "Unknown")),
+			int(row.get("round_points", 0)),
+			int(row.get("total_points", 0))
+		])
+	if parts.is_empty():
+		return ""
+	return "Round %d scores: %s" % [round_number, ", ".join(parts)]
+
+func _winner_names_text(winner_ids: Array) -> String:
+	if game_manager == null:
+		return "unknown"
+	var names: Array[String] = []
+	for raw_winner_id in winner_ids:
+		var winner_peer_id: int = int(raw_winner_id)
+		names.append(game_manager.get_player_name_for_peer(winner_peer_id))
+	if names.is_empty():
+		return "unknown"
+	return ", ".join(names)
+
 func _validate_card_for_meld_add(meld_data: Dictionary, card: Card) -> Dictionary:
 	if card == null:
 		return {
@@ -668,16 +713,17 @@ func _validate_card_for_meld_add(meld_data: Dictionary, card: Card) -> Dictionar
 				"reason": "Target meld is invalid."
 			}
 		meld_cards.append(Card.from_dict(raw_card))
-	meld_cards.append(card)
 
 	var group_type: String = str(meld_data.get("group_type", ""))
 	match group_type:
 		PutDownValidator.GROUP_SET_3:
+			var set_cards: Array[Card] = meld_cards.duplicate()
+			set_cards.append(card)
 			var set_number: int = int(meld_data.get("set_number", -1))
-			return PutDownValidator.validate_set_cards(meld_cards, set_number)
+			return PutDownValidator.validate_set_cards(set_cards, set_number)
 		PutDownValidator.GROUP_RUN_4, PutDownValidator.GROUP_RUN_7:
 			var run_suit: int = int(meld_data.get("run_suit", -1))
-			return PutDownValidator.validate_run_cards(meld_cards, run_suit)
+			return PutDownValidator.validate_run_add_to_ends(meld_cards, card, run_suit)
 		_:
 			return {
 				"ok": false,
@@ -692,6 +738,9 @@ func _ensure_game_manager_bound() -> bool:
 func _validate_turn_action_peer(peer_id: int) -> bool:
 	if not players.has(peer_id):
 		_log_err("Ignoring request from unknown peer %s." % str(peer_id))
+		return false
+	if game_manager.game_over:
+		_log("Ignoring request from %s: game is already over." % str(peer_id))
 		return false
 	var current_turn_peer_id: int = game_manager.get_current_player_peer_id()
 	if current_turn_peer_id == -1:

@@ -236,6 +236,68 @@ static func validate_run_cards(cards: Array[Card], required_suit: int = -1) -> D
 		"reason": "Invalid run: cards cannot form a consecutive sequence with wild cards."
 	}
 
+static func validate_run_add_to_ends(existing_cards: Array[Card], add_card: Card, required_suit: int = -1) -> Dictionary:
+	if add_card == null:
+		return {
+			"ok": false,
+			"reason": "Invalid card."
+		}
+	var existing_validation: Dictionary = validate_run_cards(existing_cards, required_suit)
+	if not bool(existing_validation.get("ok", false)):
+		return {
+			"ok": false,
+			"reason": "Target run is invalid."
+		}
+	var run_suit: int = int(existing_validation.get("run_suit", required_suit))
+	var existing_windows: Array[Dictionary] = _collect_valid_run_windows(existing_cards, run_suit)
+	if existing_windows.is_empty():
+		return {
+			"ok": false,
+			"reason": "Target run is invalid."
+		}
+
+	var combined_cards: Array[Card] = existing_cards.duplicate()
+	combined_cards.append(add_card)
+	var combined_validation: Dictionary = validate_run_cards(combined_cards, run_suit)
+	if not bool(combined_validation.get("ok", false)):
+		return combined_validation
+	var combined_windows: Array[Dictionary] = _collect_valid_run_windows(combined_cards, run_suit)
+	if combined_windows.is_empty():
+		return {
+			"ok": false,
+			"reason": "Card does not fit this run."
+		}
+
+	for raw_window in combined_windows:
+		if typeof(raw_window) != TYPE_DICTIONARY:
+			continue
+		var window: Dictionary = raw_window
+		var start_value: int = int(window.get("start", -1))
+		var end_value: int = int(window.get("end", -1))
+		if start_value < 0 or end_value < 0:
+			continue
+
+		var can_extend_start: bool = _has_run_window(existing_windows, start_value + 1, end_value)
+		if can_extend_start and _card_can_represent_run_edge(add_card, start_value, run_suit):
+			return {
+				"ok": true,
+				"reason": "",
+				"run_suit": run_suit
+			}
+
+		var can_extend_end: bool = _has_run_window(existing_windows, start_value, end_value - 1)
+		if can_extend_end and _card_can_represent_run_edge(add_card, end_value, run_suit):
+			return {
+				"ok": true,
+				"reason": "",
+				"run_suit": run_suit
+			}
+
+	return {
+		"ok": false,
+		"reason": "For runs, add cards only to either end of the sequence."
+	}
+
 static func _to_int_array(values: Variant) -> Array[int]:
 	var result: Array[int] = []
 	if typeof(values) != TYPE_ARRAY:
@@ -244,6 +306,70 @@ static func _to_int_array(values: Variant) -> Array[int]:
 	for raw in raw_array:
 		result.append(int(raw))
 	return result
+
+static func _collect_valid_run_windows(cards: Array[Card], required_suit: int = -1) -> Array[Dictionary]:
+	var windows: Array[Dictionary] = []
+	var run_size: int = cards.size()
+	if run_size < 3:
+		return windows
+
+	var natural_numbers: Array[int] = []
+	var wild_count: int = 0
+	var run_suit: int = required_suit
+	for card in cards:
+		if _is_wild(card):
+			wild_count += 1
+			continue
+		if run_suit == -1:
+			run_suit = int(card.suit)
+		elif int(card.suit) != run_suit:
+			return []
+		natural_numbers.append(card.number)
+	if run_suit == -1:
+		return []
+
+	natural_numbers.sort()
+	for i in range(1, natural_numbers.size()):
+		if natural_numbers[i] == natural_numbers[i - 1]:
+			return []
+
+	var min_start: int = 1
+	var max_start: int = 14 - run_size
+	if max_start < min_start:
+		return windows
+	for start in range(min_start, max_start + 1):
+		var end_value: int = start + run_size - 1
+		var all_fit_window: bool = true
+		for number in natural_numbers:
+			if number < start or number > end_value:
+				all_fit_window = false
+				break
+		if not all_fit_window:
+			continue
+		var missing_count: int = run_size - natural_numbers.size()
+		if missing_count <= wild_count:
+			windows.append({
+				"start": start,
+				"end": end_value,
+				"run_suit": run_suit
+			})
+	return windows
+
+static func _has_run_window(windows: Array[Dictionary], start_value: int, end_value: int) -> bool:
+	for raw_window in windows:
+		if typeof(raw_window) != TYPE_DICTIONARY:
+			continue
+		var window: Dictionary = raw_window
+		if int(window.get("start", -1)) == start_value and int(window.get("end", -1)) == end_value:
+			return true
+	return false
+
+static func _card_can_represent_run_edge(card: Card, edge_number: int, run_suit: int) -> bool:
+	if card == null:
+		return false
+	if _is_wild(card):
+		return true
+	return card.number == edge_number and int(card.suit) == run_suit
 
 static func _is_wild(card: Card) -> bool:
 	if card == null:
