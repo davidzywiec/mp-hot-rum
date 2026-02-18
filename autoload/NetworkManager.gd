@@ -110,5 +110,17 @@ func register_claim_pile() -> void:
 		var sender_peer_id: int = multiplayer.get_remote_sender_id()
 		handler.register_claim_pile(sender_peer_id)
 
+@rpc("any_peer")
+func register_play_again(wants_play_again: bool = true) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_play_again_vote(sender_peer_id, wants_play_again)
+
+@rpc("any_peer")
+func register_debug_end_game() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_debug_end_game(sender_peer_id)
+
 func is_server() -> bool:
 	return handler is ServerHandler

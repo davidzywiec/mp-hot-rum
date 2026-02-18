@@ -4,6 +4,7 @@ var host_flag : bool = false
 var deck : Deck
 var ruleset : Ruleset
 var card_point_rules: CardPointRules = null
+var player1_hand_override: Player1HandOverride = null
 # Player registries
 var players: Dictionary = {} # key: peer_id, value: player_data
 var player_order : Array = [] # ordered list of peer_ids for turn management
@@ -36,8 +37,7 @@ var winning_peer_ids: Array = []
 const GAME_LOG_SETTING_PATH: String = "debug/game_logs"
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 const DEFAULT_CARD_POINT_RULES_PATH: String = "res://data/scoring/default_card_point_rules.tres"
-const DEBUG_FORCE_PLAYER1_HAND_ENABLED_PATH: String = "debug/force_player1_hand_enabled"
-const DEBUG_FORCE_PLAYER1_HAND_CARDS_PATH: String = "debug/force_player1_hand_cards"
+const DEFAULT_PLAYER1_HAND_OVERRIDE_PATH: String = "res://data/debug/default_player1_hand_override.tres"
 const TURN_DEBUG: bool = true
 const CLIENT_STATE_BIND_MAX_ATTEMPTS: int = 120
 
@@ -65,6 +65,7 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 		ruleset = loaded_ruleset
 		_reset_scoring_state()
 		_load_card_point_rules()
+		_load_player1_hand_override()
 		_apply_debug_start_round()
 		create_deck(players.size())
 		deal_hand(round_number)
@@ -74,6 +75,27 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 		SignalManager.round_updated.emit(round_number, get_player_name(starting_player_index))
 	else:
 		printerr("Error loading ruleset: %s" % ruleset_loader.last_error)
+
+func end_game_session() -> void:
+	if not _is_server_authority():
+		return
+	ruleset = null
+	deck = null
+	player1_hand_override = null
+	players.clear()
+	player_order.clear()
+	player_hands.clear()
+	discard_pile.clear()
+	clear_claim_window()
+	current_player_index = 0
+	current_player_peer_id = -1
+	starting_player_index = 0
+	round_number = 1
+	reset_turn_pickup_completed()
+	reset_round_put_down_status()
+	current_round_requirement_data.clear()
+	private_put_down_buffer_data.clear()
+	_reset_scoring_state()
 
 # Create deck for the players based on player count
 func create_deck(players: int) -> void:
@@ -92,39 +114,8 @@ func deal_hand(round: int) -> void:
 	var deal_count: int = _deal_count_for_round(round)
 	if deal_count <= 0:
 		deal_count = 7
-	var forced_player1_peer_id: int = -1
-	var forced_player1_cards: Array[Card] = []
-	if bool(ProjectSettings.get_setting(DEBUG_FORCE_PLAYER1_HAND_ENABLED_PATH, false)):
-		var requested_cards: Array[Dictionary] = _parse_debug_force_player1_cards()
-		if requested_cards.is_empty():
-			_log_game("Debug forced Player 1 hand enabled, but no valid cards were provided.")
-		else:
-			if requested_cards.size() > deal_count:
-				_log_game("Debug forced Player 1 hand ignored: %d requested cards exceeds deal count %d." % [
-					requested_cards.size(), deal_count
-				])
-			else:
-				forced_player1_peer_id = _debug_player1_peer_id()
-				if forced_player1_peer_id == -1:
-					_log_game("Debug forced Player 1 hand ignored: no Player 1 resolved.")
-				else:
-					forced_player1_cards = _extract_cards_from_deck_for_debug(requested_cards)
-					if forced_player1_cards.size() != requested_cards.size():
-						forced_player1_cards.clear()
-						_log_game("Debug forced Player 1 hand ignored: one or more requested cards were unavailable in the deck.")
-					else:
-						_log_game("Debug forced Player 1 hand applied for peer %s with %d cards." % [
-							str(forced_player1_peer_id), forced_player1_cards.size()
-						])
 	for pid in players.keys():
-		var dealt_cards: Array[Card] = []
-		if int(pid) == forced_player1_peer_id and not forced_player1_cards.is_empty():
-			dealt_cards = forced_player1_cards.duplicate()
-			var filler_count: int = maxi(0, deal_count - dealt_cards.size())
-			if filler_count > 0:
-				dealt_cards.append_array(deck.deal_hand(filler_count))
-		else:
-			dealt_cards = deck.deal_hand(deal_count)
+		var dealt_cards: Array[Card] = deck.deal_hand(deal_count)
 		dealt_cards.sort_custom(func(a: Card, b: Card) -> bool:
 			if a == null:
 				return false
@@ -136,6 +127,8 @@ func deal_hand(round: int) -> void:
 		)
 		player_hands[pid] = dealt_cards
 		_log_game("Dealt hand to peer %s with %d cards." % [str(pid), player_hands[pid].size()])
+
+	_apply_debug_player1_hand_override()
 	_log_game("Dealt %d cards to %d players." % [deal_count, players.size()])
 
 func reset_hands() -> void:
@@ -346,6 +339,33 @@ func complete_current_round(finishing_peer_id: int) -> Dictionary:
 		"max_rounds": max_rounds,
 		"round_score": round_score.duplicate(true),
 		"game_over": game_over,
+		"winner_peer_ids": winning_peer_ids.duplicate()
+	}
+
+func force_end_game(finishing_peer_id: int = -1, apply_current_round_scoring: bool = true) -> Dictionary:
+	if not _is_server_authority():
+		return {}
+	if game_over:
+		return {
+			"completed_round": round_number,
+			"max_rounds": get_max_rounds(),
+			"round_score": latest_round_score_data.duplicate(true),
+			"game_over": true,
+			"winner_peer_ids": winning_peer_ids.duplicate()
+		}
+	var round_score: Dictionary = {}
+	if apply_current_round_scoring:
+		round_score = apply_round_scoring(finishing_peer_id)
+	game_over = true
+	winning_peer_ids = _calculate_winner_peer_ids()
+	clear_claim_window()
+	reset_turn_pickup_completed()
+	current_player_peer_id = -1
+	return {
+		"completed_round": round_number,
+		"max_rounds": get_max_rounds(),
+		"round_score": round_score.duplicate(true),
+		"game_over": true,
 		"winner_peer_ids": winning_peer_ids.duplicate()
 	}
 
@@ -1134,22 +1154,50 @@ func _debug_player1_peer_id() -> int:
 	peer_ids.sort()
 	return int(peer_ids[0])
 
-func _parse_debug_force_player1_cards() -> Array[Dictionary]:
-	var parsed_cards: Array[Dictionary] = []
-	var raw_cards_text: String = str(ProjectSettings.get_setting(DEBUG_FORCE_PLAYER1_HAND_CARDS_PATH, "")).strip_edges()
-	if raw_cards_text.is_empty():
-		return parsed_cards
-	var tokens: PackedStringArray = raw_cards_text.split(",", false)
-	for raw_token in tokens:
-		var token: String = String(raw_token).strip_edges().to_upper().replace(" ", "")
+func _load_player1_hand_override(path: String = DEFAULT_PLAYER1_HAND_OVERRIDE_PATH) -> void:
+	player1_hand_override = null
+	var loaded_override: Resource = load(path)
+	if loaded_override is Player1HandOverride:
+		player1_hand_override = loaded_override as Player1HandOverride
+		_log_game("Loaded Player 1 hand override from %s." % path)
+		return
+	printerr("Failed to load Player 1 hand override from %s. Disabling override." % path)
+	player1_hand_override = Player1HandOverride.new()
+
+func _apply_debug_player1_hand_override() -> void:
+	if player1_hand_override == null:
+		return
+	if not bool(player1_hand_override.enabled):
+		return
+	var player1_peer_id: int = _debug_player1_peer_id()
+	if player1_peer_id == -1:
+		_log_game("Debug Player 1 hand override enabled, but no Player 1 peer was resolved.")
+		return
+	var override_cards: Array[Card] = _build_player1_override_cards()
+	player_hands[player1_peer_id] = override_cards
+	_log_game("Applied debug Player 1 hand override for peer %s with %d cards." % [
+		str(player1_peer_id),
+		override_cards.size()
+	])
+
+func _build_player1_override_cards() -> Array[Card]:
+	var cards: Array[Card] = []
+	if player1_hand_override == null:
+		return cards
+	for raw_token in player1_hand_override.player_one_cards:
+		var token: String = str(raw_token).strip_edges().to_upper().replace(" ", "")
 		if token.is_empty():
 			continue
 		var parsed_card: Dictionary = _parse_debug_card_token(token)
 		if parsed_card.is_empty():
 			_log_game("Ignoring invalid debug card token '%s'. Expected like '5D' or 'AH'." % token)
 			continue
-		parsed_cards.append(parsed_card)
-	return parsed_cards
+		var number: int = int(parsed_card.get("number", 0))
+		var suit: int = int(parsed_card.get("suit", -1))
+		if number <= 0 or suit < 0:
+			continue
+		cards.append(Card.new(suit, number, _score_for_card_number(number)))
+	return cards
 
 func _parse_debug_card_token(token: String) -> Dictionary:
 	if token.length() < 2:
@@ -1193,34 +1241,6 @@ func _parse_debug_rank_text(rank_text: String) -> int:
 			if numeric_rank >= 1 and numeric_rank <= 13 and str(numeric_rank) == rank_text:
 				return numeric_rank
 			return -1
-
-func _extract_cards_from_deck_for_debug(requested_cards: Array[Dictionary]) -> Array[Card]:
-	var result: Array[Card] = []
-	if deck == null:
-		return result
-	var selected_indices: Array[int] = []
-	for requested in requested_cards:
-		var target_number: int = int(requested.get("number", -1))
-		var target_suit: int = int(requested.get("suit", -1))
-		var match_index: int = -1
-		for i in range(deck.cards.size()):
-			if selected_indices.has(i):
-				continue
-			var deck_card: Card = deck.cards[i]
-			if deck_card == null:
-				continue
-			if int(deck_card.suit) == target_suit and deck_card.number == target_number:
-				match_index = i
-				break
-		if match_index == -1:
-			return []
-		selected_indices.append(match_index)
-	selected_indices.sort()
-	for i in range(selected_indices.size() - 1, -1, -1):
-		var index_to_remove: int = selected_indices[i]
-		result.push_front(deck.cards[index_to_remove])
-		deck.cards.remove_at(index_to_remove)
-	return result
 
 func _build_default_put_down_progress() -> Dictionary:
 	return {

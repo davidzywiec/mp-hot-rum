@@ -13,6 +13,7 @@ signal pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, e
 signal put_down_error(message: String)
 
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
+const MAIN_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
 
 var current_player : Player
 var latest_player_state: Array = []
@@ -76,12 +77,47 @@ func send_countdown(end_unix: int) -> void:
 @rpc
 func receive_change_scene(path: String) -> void:
 	_log_server("Change scene requested: %s" % path)
-	# Let UI react (or change directly here if you prefer)
+	_apply_scene_change_locally(path)
 	SignalManager.change_scene.emit(path)
 
 func send_change_scene(path: String) -> void:
 	rpc("receive_change_scene", path)
+	_apply_scene_change_locally(path)
 	SignalManager.change_scene.emit(path)
+
+func _apply_scene_change_locally(path: String) -> void:
+	if path.strip_edges().is_empty():
+		return
+	if _is_dedicated_server_process():
+		return
+	if path == MAIN_MENU_SCENE_PATH:
+		_disconnect_local_network_session()
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	if tree.current_scene != null and tree.current_scene.scene_file_path == path:
+		return
+	tree.change_scene_to_file(path)
+
+func _is_dedicated_server_process() -> bool:
+	if OS.has_feature("server"):
+		return true
+	var args: PackedStringArray = OS.get_cmdline_args()
+	return args.has("--server")
+
+func _disconnect_local_network_session() -> void:
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+	var network_manager_node: Node = get_node_or_null("/root/Network_Manager")
+	if network_manager_node == null:
+		return
+	var handler_variant: Variant = network_manager_node.get("handler")
+	if handler_variant is Node:
+		var handler_node: Node = handler_variant as Node
+		if is_instance_valid(handler_node):
+			handler_node.queue_free()
+	network_manager_node.set("handler", null)
 
 # --- Host assignment sync ---
 @rpc

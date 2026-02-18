@@ -133,8 +133,13 @@ func toggle_countdown_timer(flag: bool) -> void:
 # NEW: react to server-ordered scene change
 func _on_change_scene(path: String) -> void:
 	var target: String = path if path != "" else next_scene_fallback
-	print("🎬 Changing scene to: ", target)
-	get_tree().change_scene_to_file(target)
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	if tree.current_scene != null and tree.current_scene.scene_file_path == target:
+		return
+	print("Changing scene to: ", target)
+	tree.change_scene_to_file(target)
 
 func _on_host_changed(host_peer_id: int) -> void:
 	var me: int = multiplayer.get_unique_id()

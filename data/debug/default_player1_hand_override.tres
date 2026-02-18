@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="Player1HandOverride" load_steps=2 format=3 uid="uid://b7kspwdmmkw0p"]
+
+[ext_resource type="Script" uid="uid://cf1v82j0v8tm2" path="res://data/debug/player1_hand_override.gd" id="1_player1_override"]
+
+[resource]
+script = ExtResource("1_player1_override")
+enabled = true
+player_one_cards = PackedStringArray("3d", "4d", "5d", "6d", "2h", "3h", "4h", "5h", "6h", "2s", "3s", "4s")

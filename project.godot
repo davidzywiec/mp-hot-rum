@@ -28,16 +28,14 @@ DevOverlay="*res://autoload/DevOverlay.gd"
 
 [debug]
 
-force_player1_hand_enabled=true
-force_player1_hand_cards="2d, 2c, 4h, 5h,6h,7h, 8c"
 network_debug=true
 ui_debug=true
 short_countdown=true
-network_logs=true
+network_logs=false
 game_logs=true
 snapshot_logs=false
 dev_overlay=false
-start_round=2
+start_round=1
 
 [display]
 

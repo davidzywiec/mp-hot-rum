@@ -13,6 +13,7 @@ var pass_pile_button: Button = null
 var claim_pile_button: Button = null
 var meld_board_button: Button = null
 var score_sheet_button: Button = null
+var debug_end_game_button: Button = null
 var put_down_button: Button = null
 var discard_selected_button: Button = null
 var clear_selection_button: Button = null
@@ -27,6 +28,12 @@ var pile_title_label: Label = null
 var pile_card_holder: CenterContainer = null
 var pile_card_view: CardView = null
 var round_rules_label: Label = null
+var game_over_overlay: ColorRect = null
+var game_over_title_label: Label = null
+var game_over_status_label: Label = null
+var game_over_scores_text: RichTextLabel = null
+var play_again_game_button: Button = null
+var leave_game_button: Button = null
 
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/game/CardView.tscn")
 const BASE_HAND_SPACING: float = 4.0
@@ -34,6 +41,8 @@ const STAGED_CARD_SCALE: float = 0.55
 const PILE_CARD_SCALE: float = 1.0
 const TURN_DEBUG: bool = true
 const PUT_DOWN_ERROR_DISPLAY_MS: int = 4500
+const MAIN_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
+const DEBUG_UI_SETTING_PATH: String = "debug/ui_debug"
 
 var _dragging_card: CardView = null
 var _drag_visual: CardView = null
@@ -48,6 +57,7 @@ var _meld_board_list: VBoxContainer = null
 var _score_sheet_popup: AcceptDialog = null
 var _score_sheet_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
+var _play_again_vote_peer_ids: Array[int] = []
 
 func _ready() -> void:
 	_resolve_hand_nodes()
@@ -65,18 +75,26 @@ func _ready() -> void:
 		meld_board_button.pressed.connect(_on_meld_board_pressed)
 	if score_sheet_button != null:
 		score_sheet_button.pressed.connect(_on_score_sheet_pressed)
+	if debug_end_game_button != null:
+		debug_end_game_button.pressed.connect(_on_debug_end_game_pressed)
 	if put_down_button != null:
 		put_down_button.pressed.connect(_on_put_down_pressed)
 	if discard_selected_button != null:
 		discard_selected_button.pressed.connect(_on_discard_selected_pressed)
 	if clear_selection_button != null:
 		clear_selection_button.pressed.connect(_on_clear_selection_pressed)
+	if play_again_game_button != null:
+		play_again_game_button.pressed.connect(_on_play_again_game_pressed)
+	if leave_game_button != null:
+		leave_game_button.pressed.connect(_on_leave_game_pressed)
 	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
 	_refresh_meld_board_if_open()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_game_over_overlay()
+	_update_debug_controls_visibility()
 	_debug_turn_state("ready")
 	SignalManager.round_updated.connect(update_round_ui)
 	Game_State_Manager.game_state_updated.connect(_on_game_state_updated)
@@ -89,15 +107,19 @@ func _ready() -> void:
 		pull_round_ui()
 	_render_local_hand()
 
-func _on_game_state_updated(_state: Dictionary) -> void:
+func _on_game_state_updated(state: Dictionary) -> void:
+	_update_play_again_votes_from_state(state)
 	if not GameManager.claim_window_active:
 		_local_claim_offer_passed = false
+	if not GameManager.game_over:
+		_play_again_vote_peer_ids.clear()
 	_debug_turn_state("game_state_updated_pre")
 	pull_round_ui()
 	_update_action_buttons_state()
 	_update_claim_status_label()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_game_over_overlay()
 	_update_staged_put_down_ui()
 	_refresh_meld_board_if_open()
 	_refresh_score_sheet_if_open()
@@ -123,6 +145,7 @@ func update_round_ui(round: int, current_player_name: String) -> void:
 	_update_claim_status_label()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_game_over_overlay()
 	_refresh_score_sheet_if_open()
 	_debug_turn_state("update_round_ui")
 
@@ -348,6 +371,7 @@ func _resolve_hand_nodes() -> void:
 	claim_pile_button = get_node_or_null("RoundDataContainer/ActionBar/ClaimPileButton") as Button
 	meld_board_button = get_node_or_null("RoundDataContainer/ActionBar/MeldBoardButton") as Button
 	score_sheet_button = get_node_or_null("RoundDataContainer/ActionBar/ScoreSheetButton") as Button
+	debug_end_game_button = get_node_or_null("RoundDataContainer/ActionBar/DebugEndGameButton") as Button
 	put_down_button = get_node_or_null("RoundDataContainer/ActionBar/PutDownButton") as Button
 	discard_selected_button = get_node_or_null("RoundDataContainer/ActionBar/DiscardSelectedButton") as Button
 	clear_selection_button = get_node_or_null("RoundDataContainer/ActionBar/ClearSelectionButton") as Button
@@ -359,6 +383,12 @@ func _resolve_hand_nodes() -> void:
 	pile_title_label = get_node_or_null("RoundDataContainer/PileContainer/PileTitle") as Label
 	pile_card_holder = get_node_or_null("RoundDataContainer/PileContainer/PileCardHolder") as CenterContainer
 	round_rules_label = get_node_or_null("RoundDataContainer/RoundRulesPanel/RoundRulesLabel") as Label
+	game_over_overlay = get_node_or_null("RoundDataContainer/GameOverOverlay") as ColorRect
+	game_over_title_label = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/TitleLabel") as Label
+	game_over_status_label = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/StatusLabel") as Label
+	game_over_scores_text = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/ScoresText") as RichTextLabel
+	play_again_game_button = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons/PlayAgainButton") as Button
+	leave_game_button = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons/LeaveGameButton") as Button
 
 	hand_scroll = get_node_or_null("RoundDataContainer/HandScroll") as ScrollContainer
 	hand_container = get_node_or_null("RoundDataContainer/HandScroll/HandContainer") as HBoxContainer
@@ -625,6 +655,53 @@ func _game_over_status_text() -> String:
 		return "Winner: %s" % winner_names[0]
 	return "Winners: %s" % ", ".join(winner_names)
 
+func _update_play_again_votes_from_state(state: Dictionary) -> void:
+	_play_again_vote_peer_ids.clear()
+	var raw_votes: Variant = state.get("play_again_peer_ids", [])
+	if typeof(raw_votes) != TYPE_ARRAY:
+		return
+	var raw_votes_array: Array = raw_votes
+	for raw_peer_id in raw_votes_array:
+		_play_again_vote_peer_ids.append(int(raw_peer_id))
+
+func _local_has_play_again_vote() -> bool:
+	var local_peer_id: int = multiplayer.get_unique_id()
+	if local_peer_id <= 0:
+		return false
+	return _play_again_vote_peer_ids.has(local_peer_id)
+
+func _update_game_over_overlay() -> void:
+	if game_over_overlay == null:
+		return
+	var is_game_over: bool = GameManager.game_over
+	game_over_overlay.visible = is_game_over
+	if not is_game_over:
+		if play_again_game_button != null:
+			play_again_game_button.disabled = false
+		return
+
+	if game_over_title_label != null:
+		game_over_title_label.text = _game_over_status_text()
+	if game_over_scores_text != null:
+		game_over_scores_text.clear()
+		game_over_scores_text.add_text(_build_score_sheet_text())
+		game_over_scores_text.scroll_to_line(0)
+
+	var total_players: int = int(GameManager.players.size())
+	var vote_count: int = int(_play_again_vote_peer_ids.size())
+	var local_voted: bool = _local_has_play_again_vote()
+	if play_again_game_button != null:
+		play_again_game_button.disabled = local_voted or total_players < 2
+	if game_over_status_label != null:
+		if total_players < 2:
+			game_over_status_label.text = "Only one player connected. Returning to start screen..."
+		elif vote_count >= total_players:
+			game_over_status_label.text = "All players ready. Restarting game..."
+		elif local_voted:
+			game_over_status_label.text = "Waiting for other players... (%d/%d ready)" % [vote_count, total_players]
+		else:
+			game_over_status_label.text = "Press Play Again when you are ready. (%d/%d ready)" % [vote_count, total_players]
+
 func _on_end_turn_pressed() -> void:
 	_debug_turn_state("end_turn_pressed_before")
 	if not _can_local_end_turn():
@@ -675,6 +752,8 @@ func _update_action_buttons_state() -> void:
 		discard_selected_button.disabled = not (_can_local_discard_card() and selected_count == 1)
 	if clear_selection_button != null:
 		clear_selection_button.disabled = selected_count <= 0
+	if debug_end_game_button != null:
+		debug_end_game_button.disabled = GameManager.game_over
 
 func _can_local_end_turn() -> bool:
 	if GameManager.game_over:
@@ -883,6 +962,37 @@ func _on_score_sheet_pressed() -> void:
 	if _score_sheet_popup != null:
 		_score_sheet_popup.popup_centered(Vector2i(760, 460))
 
+func _on_debug_end_game_pressed() -> void:
+	if GameManager.game_over:
+		return
+	if debug_end_game_button != null:
+		debug_end_game_button.disabled = true
+	if multiplayer.is_server() or OS.has_feature("server"):
+		if Network_Manager.handler is ServerHandler:
+			var local_peer_id: int = multiplayer.get_unique_id()
+			(Network_Manager.handler as ServerHandler).register_debug_end_game(local_peer_id)
+	else:
+		if multiplayer.multiplayer_peer != null:
+			Network_Manager.rpc_id(1, "register_debug_end_game")
+	_update_action_buttons_state()
+
+func _on_play_again_game_pressed() -> void:
+	if not GameManager.game_over:
+		return
+	if play_again_game_button != null:
+		play_again_game_button.disabled = true
+	if multiplayer.is_server() or OS.has_feature("server"):
+		if Network_Manager.handler is ServerHandler:
+			var local_peer_id: int = multiplayer.get_unique_id()
+			(Network_Manager.handler as ServerHandler).register_play_again_vote(local_peer_id, true)
+	else:
+		if multiplayer.multiplayer_peer != null:
+			Network_Manager.rpc_id(1, "register_play_again", true)
+	_update_game_over_overlay()
+
+func _on_leave_game_pressed() -> void:
+	_disconnect_and_return_to_menu()
+
 func _refresh_meld_board_if_open() -> void:
 	if _meld_board_popup == null:
 		return
@@ -896,6 +1006,20 @@ func _refresh_score_sheet_if_open() -> void:
 	if not _score_sheet_popup.visible:
 		return
 	_refresh_score_sheet_popup()
+
+func _disconnect_and_return_to_menu() -> void:
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+	if Network_Manager.handler != null:
+		Network_Manager.handler.queue_free()
+		Network_Manager.handler = null
+	get_tree().change_scene_to_file(MAIN_MENU_SCENE_PATH)
+
+func _update_debug_controls_visibility() -> void:
+	if debug_end_game_button == null:
+		return
+	debug_end_game_button.visible = bool(ProjectSettings.get_setting(DEBUG_UI_SETTING_PATH, false))
 
 func _ensure_meld_board_popup() -> void:
 	if _meld_board_popup != null:

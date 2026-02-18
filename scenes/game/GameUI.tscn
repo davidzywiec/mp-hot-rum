@@ -120,6 +120,11 @@ text = "Meld Board"
 layout_mode = 2
 text = "Score Sheet"
 
+[node name="DebugEndGameButton" type="Button" parent="RoundDataContainer/ActionBar"]
+visible = false
+layout_mode = 2
+text = "Debug End Game"
+
 [node name="PutDownButton" type="Button" parent="RoundDataContainer/ActionBar"]
 layout_mode = 2
 text = "Put Down"
@@ -272,3 +277,68 @@ scroll_active = false
 autowrap_mode = 0
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="GameOverOverlay" type="ColorRect" parent="RoundDataContainer"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.72)
+
+[node name="Center" type="CenterContainer" parent="RoundDataContainer/GameOverOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="RoundDataContainer/GameOverOverlay/Center"]
+layout_mode = 2
+custom_minimum_size = Vector2(700, 440)
+
+[node name="VB" type="VBoxContainer" parent="RoundDataContainer/GameOverOverlay/Center/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
+layout_mode = 2
+text = "Game Over"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
+layout_mode = 2
+text = "Press Play Again when you are ready."
+horizontal_alignment = 1
+
+[node name="ScoresText" type="RichTextLabel" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+autowrap_mode = 3
+
+[node name="Buttons" type="HBoxContainer" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="PlayAgainButton" type="Button" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons"]
+layout_mode = 2
+text = "Play Again"
+
+[node name="LeaveGameButton" type="Button" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons"]
+layout_mode = 2
+text = "Leave Match"
