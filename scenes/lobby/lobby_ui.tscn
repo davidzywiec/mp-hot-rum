@@ -43,8 +43,4 @@ visible = false
 layout_mode = 2
 text = "Ready"
 
-[node name="OVERRIDE_START_BT" type="Button" parent="VBC"]
-layout_mode = 2
-text = "SERVER START WITH FAKE PLAYERS"
-
 [node name="CountDownNode" type="Node2D" parent="."]

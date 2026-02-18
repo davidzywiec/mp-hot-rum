@@ -8,6 +8,7 @@ signal countdown_toggle(flag: bool)
 signal countdown_sync(end_unix: int)
 signal game_state_updated(state: Dictionary)
 signal private_hand_updated(cards: Array)
+signal pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool)
 
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 
@@ -125,7 +126,20 @@ func receive_private_hand(cards_or_peer, maybe_cards = null) -> void:
 		cards = cards_or_peer
 	print("receive_private_hand called. cards=%d args_shape=%s" % [
 		cards.size(),
-		"two-arg" if maybe_cards != null else "one-arg"
+		_args_shape_for_private_hand(maybe_cards)
 	])
 	GameManager.apply_private_hand(cards)
 	emit_signal("private_hand_updated", cards)
+
+func _args_shape_for_private_hand(maybe_cards: Variant) -> String:
+	if maybe_cards != null:
+		return "two-arg"
+	return "one-arg"
+
+@rpc
+func receive_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
+	emit_signal("pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
+
+func send_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
+	rpc("receive_pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
+	emit_signal("pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
