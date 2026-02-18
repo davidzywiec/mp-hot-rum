@@ -1,6 +1,5 @@
-[gd_scene load_steps=3 format=3 uid="uid://cphp6eghcffai"]
+[gd_scene load_steps=2 format=3 uid="uid://cphp6eghcffai"]
 
-[ext_resource type="Texture2D" uid="uid://b38qwflnw0c0d" path="res://assets/sprites/Deck.png" id="1_a0tey"]
 [ext_resource type="PackedScene" uid="uid://ch1dgmbxltdv8" path="res://scenes/game/GameUI.tscn" id="2_ahvv7"]
 
 [node name="MainGame" type="Node2D"]
@@ -8,24 +7,6 @@
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(576, 324)
 
-[node name="Deck" type="Sprite2D" parent="."]
-position = Vector2(560, 467)
-texture = ExtResource("1_a0tey")
-
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="GameUI" parent="UI" instance=ExtResource("2_ahvv7")]
-
-[node name="Label" type="Label" parent="UI"]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -83.5
-offset_top = -11.5
-offset_right = 83.5
-offset_bottom = 11.5
-grow_horizontal = 2
-grow_vertical = 2
-text = "PLACE HOLDER GAME"
