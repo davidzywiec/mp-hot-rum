@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CardPointRules" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/scoring/card_point_rules.gd" id="1_card_points"]
+
+[resource]
+script = ExtResource("1_card_points")
+ace_points = 15
+two_points = 20
+three_to_nine_points = 5
+ten_to_king_points = 10

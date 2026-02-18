@@ -116,6 +116,10 @@ text = "Claim Pile"
 layout_mode = 2
 text = "Meld Board"
 
+[node name="ScoreSheetButton" type="Button" parent="RoundDataContainer/ActionBar"]
+layout_mode = 2
+text = "Score Sheet"
+
 [node name="PutDownButton" type="Button" parent="RoundDataContainer/ActionBar"]
 layout_mode = 2
 text = "Put Down"

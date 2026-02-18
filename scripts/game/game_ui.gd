@@ -12,6 +12,7 @@ var take_pile_button: Button = null
 var pass_pile_button: Button = null
 var claim_pile_button: Button = null
 var meld_board_button: Button = null
+var score_sheet_button: Button = null
 var put_down_button: Button = null
 var discard_selected_button: Button = null
 var clear_selection_button: Button = null
@@ -44,6 +45,8 @@ var _put_down_error_until_msec: int = 0
 var _meld_board_popup: AcceptDialog = null
 var _meld_board_scroll: ScrollContainer = null
 var _meld_board_list: VBoxContainer = null
+var _score_sheet_popup: AcceptDialog = null
+var _score_sheet_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
 
 func _ready() -> void:
@@ -60,6 +63,8 @@ func _ready() -> void:
 		claim_pile_button.pressed.connect(_on_claim_pile_pressed)
 	if meld_board_button != null:
 		meld_board_button.pressed.connect(_on_meld_board_pressed)
+	if score_sheet_button != null:
+		score_sheet_button.pressed.connect(_on_score_sheet_pressed)
 	if put_down_button != null:
 		put_down_button.pressed.connect(_on_put_down_pressed)
 	if discard_selected_button != null:
@@ -95,11 +100,14 @@ func _on_game_state_updated(_state: Dictionary) -> void:
 	_update_round_rules_ui()
 	_update_staged_put_down_ui()
 	_refresh_meld_board_if_open()
+	_refresh_score_sheet_if_open()
 	_debug_turn_state("game_state_updated_post")
 
 func pull_round_ui() -> void:
 	var round: int = GameManager.round_number
 	var current_player_name: String = GameManager.get_player_name(GameManager.current_player_index)
+	if GameManager.game_over:
+		current_player_name = _game_over_status_text()
 	update_round_ui(round, current_player_name)
 
 
@@ -115,6 +123,7 @@ func update_round_ui(round: int, current_player_name: String) -> void:
 	_update_claim_status_label()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_refresh_score_sheet_if_open()
 	_debug_turn_state("update_round_ui")
 
 func _on_private_hand_updated(_cards: Array) -> void:
@@ -338,6 +347,7 @@ func _resolve_hand_nodes() -> void:
 	pass_pile_button = get_node_or_null("RoundDataContainer/ActionBar/PassPileButton") as Button
 	claim_pile_button = get_node_or_null("RoundDataContainer/ActionBar/ClaimPileButton") as Button
 	meld_board_button = get_node_or_null("RoundDataContainer/ActionBar/MeldBoardButton") as Button
+	score_sheet_button = get_node_or_null("RoundDataContainer/ActionBar/ScoreSheetButton") as Button
 	put_down_button = get_node_or_null("RoundDataContainer/ActionBar/PutDownButton") as Button
 	discard_selected_button = get_node_or_null("RoundDataContainer/ActionBar/DiscardSelectedButton") as Button
 	clear_selection_button = get_node_or_null("RoundDataContainer/ActionBar/ClearSelectionButton") as Button
@@ -477,6 +487,9 @@ func _update_round_rules_ui() -> void:
 		return
 	var round_num: int = int(GameManager.round_number)
 	var requirement: Dictionary = GameManager.get_current_round_requirement_dict()
+	if GameManager.game_over:
+		round_rules_label.text = "Game Over\nOpen Score Sheet for final standings."
+		return
 	if requirement.is_empty():
 		round_rules_label.text = "Round %d Requirements\nWaiting for rules from server..." % round_num
 		return
@@ -539,6 +552,79 @@ func _variant_to_int_array(values: Variant) -> Array[int]:
 		result.append(int(raw))
 	return result
 
+func _build_score_sheet_text() -> String:
+	var lines: Array[String] = ["Score Sheet (lowest total wins)"]
+	var score_sheet: Array = GameManager.get_score_sheet_data()
+	if score_sheet.is_empty():
+		lines.append("No round scores yet.")
+	else:
+		lines.append("Rounds:")
+		for raw_round in score_sheet:
+			if typeof(raw_round) != TYPE_DICTIONARY:
+				continue
+			var round_entry: Dictionary = raw_round
+			var round_num: int = int(round_entry.get("round", 0))
+			var row_parts: Array[String] = []
+			var rows_raw: Variant = round_entry.get("rows", [])
+			if typeof(rows_raw) == TYPE_ARRAY:
+				var rows: Array = rows_raw
+				for raw_row in rows:
+					if typeof(raw_row) != TYPE_DICTIONARY:
+						continue
+					var row: Dictionary = raw_row
+					row_parts.append("%s +%d" % [
+						str(row.get("name", "Unknown")),
+						int(row.get("round_points", 0))
+					])
+			if row_parts.is_empty():
+				continue
+			lines.append("R%d: %s" % [round_num, ", ".join(row_parts)])
+	var totals: Array = _sorted_score_totals()
+	if not totals.is_empty():
+		lines.append("Totals:")
+		for raw_total in totals:
+			if typeof(raw_total) != TYPE_DICTIONARY:
+				continue
+			var total_row: Dictionary = raw_total
+			lines.append("%s: %d" % [
+				str(total_row.get("name", "Unknown")),
+				int(total_row.get("score", 0))
+			])
+	if GameManager.game_over:
+		lines.append(_game_over_status_text())
+	return "\n".join(lines)
+
+func _sorted_score_totals() -> Array:
+	var totals: Array = []
+	var peer_ids: Array = GameManager.players.keys()
+	peer_ids.sort()
+	for raw_peer_id in peer_ids:
+		var peer_id: int = int(raw_peer_id)
+		totals.append({
+			"peer_id": peer_id,
+			"name": _player_name_from_peer_id(peer_id),
+			"score": _player_score_from_peer_id(peer_id)
+		})
+	totals.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var score_a: int = int(a.get("score", 0))
+		var score_b: int = int(b.get("score", 0))
+		if score_a == score_b:
+			return str(a.get("name", "")) < str(b.get("name", ""))
+		return score_a < score_b
+	)
+	return totals
+
+func _game_over_status_text() -> String:
+	var winner_ids: Array = GameManager.get_winning_peer_ids()
+	if winner_ids.is_empty():
+		return "Game Over"
+	var winner_names: Array[String] = []
+	for raw_winner_id in winner_ids:
+		winner_names.append(_player_name_from_peer_id(int(raw_winner_id)))
+	if winner_names.size() == 1:
+		return "Winner: %s" % winner_names[0]
+	return "Winners: %s" % ", ".join(winner_names)
+
 func _on_end_turn_pressed() -> void:
 	_debug_turn_state("end_turn_pressed_before")
 	if not _can_local_end_turn():
@@ -591,11 +677,15 @@ func _update_action_buttons_state() -> void:
 		clear_selection_button.disabled = selected_count <= 0
 
 func _can_local_end_turn() -> bool:
+	if GameManager.game_over:
+		return false
 	if not _is_local_players_turn():
 		return false
 	return GameManager.turn_discard_completed
 
 func _can_local_put_down() -> bool:
+	if GameManager.game_over:
+		return false
 	if not _is_local_players_turn():
 		return false
 	if GameManager.claim_window_active:
@@ -608,6 +698,8 @@ func _can_local_put_down() -> bool:
 	return not GameManager.has_player_put_down(local_peer_id)
 
 func _can_local_add_to_meld_state() -> bool:
+	if GameManager.game_over:
+		return false
 	if not _is_local_players_turn():
 		return false
 	if GameManager.claim_window_active:
@@ -623,6 +715,8 @@ func _can_local_select_cards() -> bool:
 	return _can_local_put_down() or _can_local_add_to_meld_state()
 
 func _can_local_discard_card() -> bool:
+	if GameManager.game_over:
+		return false
 	if not _is_local_players_turn():
 		return false
 	if GameManager.claim_window_active:
@@ -632,6 +726,8 @@ func _can_local_discard_card() -> bool:
 	return not GameManager.turn_discard_completed
 
 func _is_local_players_turn() -> bool:
+	if GameManager.game_over:
+		return false
 	var local_peer_id: int = multiplayer.get_unique_id()
 	if local_peer_id <= 0:
 		return false
@@ -639,6 +735,8 @@ func _is_local_players_turn() -> bool:
 	return current_turn_peer_id != -1 and current_turn_peer_id == local_peer_id
 
 func _can_local_claim_pile() -> bool:
+	if GameManager.game_over:
+		return false
 	var local_peer_id: int = multiplayer.get_unique_id()
 	if local_peer_id <= 0:
 		return false
@@ -651,6 +749,8 @@ func _can_local_claim_pile() -> bool:
 	return not _is_local_players_turn()
 
 func _can_local_pass_claim_offer() -> bool:
+	if GameManager.game_over:
+		return false
 	if _local_claim_offer_passed:
 		return false
 	if not GameManager.claim_window_active:
@@ -777,12 +877,25 @@ func _on_meld_board_pressed() -> void:
 	if _meld_board_popup != null:
 		_meld_board_popup.popup_centered(Vector2i(760, 420))
 
+func _on_score_sheet_pressed() -> void:
+	_ensure_score_sheet_popup()
+	_refresh_score_sheet_popup()
+	if _score_sheet_popup != null:
+		_score_sheet_popup.popup_centered(Vector2i(760, 460))
+
 func _refresh_meld_board_if_open() -> void:
 	if _meld_board_popup == null:
 		return
 	if not _meld_board_popup.visible:
 		return
 	_refresh_meld_board()
+
+func _refresh_score_sheet_if_open() -> void:
+	if _score_sheet_popup == null:
+		return
+	if not _score_sheet_popup.visible:
+		return
+	_refresh_score_sheet_popup()
 
 func _ensure_meld_board_popup() -> void:
 	if _meld_board_popup != null:
@@ -803,6 +916,31 @@ func _ensure_meld_board_popup() -> void:
 	_meld_board_popup = popup
 	_meld_board_scroll = scroll
 	_meld_board_list = list
+
+func _ensure_score_sheet_popup() -> void:
+	if _score_sheet_popup != null:
+		return
+	var popup: AcceptDialog = AcceptDialog.new()
+	popup.title = "Score Sheet"
+	popup.exclusive = false
+	var score_text: RichTextLabel = RichTextLabel.new()
+	score_text.custom_minimum_size = Vector2(720, 360)
+	score_text.scroll_active = true
+	score_text.bbcode_enabled = false
+	score_text.fit_content = false
+	score_text.selection_enabled = true
+	score_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	popup.add_child(score_text)
+	add_child(popup)
+	_score_sheet_popup = popup
+	_score_sheet_text = score_text
+
+func _refresh_score_sheet_popup() -> void:
+	if _score_sheet_text == null:
+		return
+	_score_sheet_text.clear()
+	_score_sheet_text.add_text(_build_score_sheet_text())
+	_score_sheet_text.scroll_to_line(0)
 
 func _refresh_meld_board() -> void:
 	if _meld_board_list == null:
@@ -922,6 +1060,9 @@ func _process(_delta: float) -> void:
 func _update_claim_status_label() -> void:
 	if claim_status_label == null:
 		return
+	if GameManager.game_over:
+		claim_status_label.text = _game_over_status_text()
+		return
 	if not GameManager.claim_window_active:
 		var now_msec: int = int(Time.get_ticks_msec())
 		if now_msec <= _put_down_error_until_msec and not _put_down_error_text.is_empty():
@@ -1010,6 +1151,17 @@ func _player_name_from_peer_id(peer_id: int) -> String:
 		if typeof(player_data) == TYPE_DICTIONARY and player_data.has("name"):
 			return str(player_data["name"])
 	return "Player %s" % str(peer_id)
+
+func _player_score_from_peer_id(peer_id: int) -> int:
+	if not GameManager.players.has(peer_id):
+		return 0
+	var player_data: Variant = GameManager.players[peer_id]
+	if player_data is Player:
+		return int((player_data as Player).score)
+	if typeof(player_data) == TYPE_DICTIONARY:
+		var player_dict: Dictionary = player_data
+		return int(player_dict.get("score", 0))
+	return 0
 
 func _card_dict_to_text(card_data: Dictionary) -> String:
 	if card_data.is_empty():

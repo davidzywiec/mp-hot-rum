@@ -3,6 +3,7 @@
 var host_flag : bool = false
 var deck : Deck
 var ruleset : Ruleset
+var card_point_rules: CardPointRules = null
 # Player registries
 var players: Dictionary = {} # key: peer_id, value: player_data
 var player_order : Array = [] # ordered list of peer_ids for turn management
@@ -27,9 +28,16 @@ var next_meld_id: int = 1
 var public_melds_data: Array = [] # client-side snapshot cache
 var current_round_requirement_data: Dictionary = {}
 var private_put_down_buffer_data: Array = [] # client-only staged put-down cards for local player
+var score_sheet_data: Array = [] # Array[Dictionary] with per-round scores
+var latest_round_score_data: Dictionary = {}
+var game_over: bool = false
+var winning_peer_ids: Array = []
 
 const GAME_LOG_SETTING_PATH: String = "debug/game_logs"
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
+const DEFAULT_CARD_POINT_RULES_PATH: String = "res://data/scoring/default_card_point_rules.tres"
+const DEBUG_FORCE_PLAYER1_HAND_ENABLED_PATH: String = "debug/force_player1_hand_enabled"
+const DEBUG_FORCE_PLAYER1_HAND_CARDS_PATH: String = "debug/force_player1_hand_cards"
 const TURN_DEBUG: bool = true
 const CLIENT_STATE_BIND_MAX_ATTEMPTS: int = 120
 
@@ -55,6 +63,8 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 	var loaded_ruleset: Ruleset = ruleset_loader.load_ruleset(ruleset_path)
 	if loaded_ruleset != null:
 		ruleset = loaded_ruleset
+		_reset_scoring_state()
+		_load_card_point_rules()
 		_apply_debug_start_round()
 		create_deck(players.size())
 		deal_hand(round_number)
@@ -69,7 +79,7 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 func create_deck(players: int) -> void:
 	if not _is_server_authority():
 		return
-	deck = Deck.new(players)
+	deck = Deck.new(players, card_point_rules)
 	_log_game("Deck created for %d players." % players)
 
 # Create hand for each player based on the hand count for that round
@@ -82,8 +92,49 @@ func deal_hand(round: int) -> void:
 	var deal_count: int = _deal_count_for_round(round)
 	if deal_count <= 0:
 		deal_count = 7
+	var forced_player1_peer_id: int = -1
+	var forced_player1_cards: Array[Card] = []
+	if bool(ProjectSettings.get_setting(DEBUG_FORCE_PLAYER1_HAND_ENABLED_PATH, false)):
+		var requested_cards: Array[Dictionary] = _parse_debug_force_player1_cards()
+		if requested_cards.is_empty():
+			_log_game("Debug forced Player 1 hand enabled, but no valid cards were provided.")
+		else:
+			if requested_cards.size() > deal_count:
+				_log_game("Debug forced Player 1 hand ignored: %d requested cards exceeds deal count %d." % [
+					requested_cards.size(), deal_count
+				])
+			else:
+				forced_player1_peer_id = _debug_player1_peer_id()
+				if forced_player1_peer_id == -1:
+					_log_game("Debug forced Player 1 hand ignored: no Player 1 resolved.")
+				else:
+					forced_player1_cards = _extract_cards_from_deck_for_debug(requested_cards)
+					if forced_player1_cards.size() != requested_cards.size():
+						forced_player1_cards.clear()
+						_log_game("Debug forced Player 1 hand ignored: one or more requested cards were unavailable in the deck.")
+					else:
+						_log_game("Debug forced Player 1 hand applied for peer %s with %d cards." % [
+							str(forced_player1_peer_id), forced_player1_cards.size()
+						])
 	for pid in players.keys():
-		player_hands[pid] = deck.deal_hand(deal_count)
+		var dealt_cards: Array[Card] = []
+		if int(pid) == forced_player1_peer_id and not forced_player1_cards.is_empty():
+			dealt_cards = forced_player1_cards.duplicate()
+			var filler_count: int = maxi(0, deal_count - dealt_cards.size())
+			if filler_count > 0:
+				dealt_cards.append_array(deck.deal_hand(filler_count))
+		else:
+			dealt_cards = deck.deal_hand(deal_count)
+		dealt_cards.sort_custom(func(a: Card, b: Card) -> bool:
+			if a == null:
+				return false
+			if b == null:
+				return true
+			if a.number == b.number:
+				return int(a.suit) < int(b.suit)
+			return a.number < b.number
+		)
+		player_hands[pid] = dealt_cards
 		_log_game("Dealt hand to peer %s with %d cards." % [str(pid), player_hands[pid].size()])
 	_log_game("Dealt %d cards to %d players." % [deal_count, players.size()])
 
@@ -246,6 +297,82 @@ func get_current_round_requirement_dict() -> Dictionary:
 	if not current_round_requirement_data.is_empty():
 		return current_round_requirement_data
 	return serialize_current_round_requirement()
+
+func get_max_rounds() -> int:
+	if ruleset == null:
+		return 1
+	var max_rounds: int = int(ruleset.max_rounds)
+	if max_rounds <= 0:
+		return 1
+	return max_rounds
+
+func get_score_sheet_data() -> Array:
+	return score_sheet_data.duplicate(true)
+
+func get_latest_round_score_data() -> Dictionary:
+	return latest_round_score_data.duplicate(true)
+
+func get_winning_peer_ids() -> Array:
+	return winning_peer_ids.duplicate()
+
+func get_player_name_for_peer(peer_id: int) -> String:
+	if players.has(peer_id):
+		var player_data: Variant = players[peer_id]
+		if player_data is Player:
+			return (player_data as Player).name
+		if typeof(player_data) == TYPE_DICTIONARY and player_data.has("name"):
+			return str(player_data["name"])
+	return "Player %s" % str(peer_id)
+
+func complete_current_round(finishing_peer_id: int) -> Dictionary:
+	if not _is_server_authority():
+		return {}
+	var completed_round: int = round_number
+	var round_score: Dictionary = apply_round_scoring(finishing_peer_id)
+	var max_rounds: int = get_max_rounds()
+	var is_final_round: bool = completed_round >= max_rounds
+	if is_final_round:
+		game_over = true
+		winning_peer_ids = _calculate_winner_peer_ids()
+		clear_claim_window()
+		reset_turn_pickup_completed()
+		current_player_peer_id = -1
+	else:
+		game_over = false
+		winning_peer_ids.clear()
+		advance_to_next_round()
+	return {
+		"completed_round": completed_round,
+		"max_rounds": max_rounds,
+		"round_score": round_score.duplicate(true),
+		"game_over": game_over,
+		"winner_peer_ids": winning_peer_ids.duplicate()
+	}
+
+func apply_round_scoring(finishing_peer_id: int) -> Dictionary:
+	if not _is_server_authority():
+		return {}
+	var round_rows: Array = []
+	var peer_ids: Array = players.keys()
+	peer_ids.sort()
+	for raw_peer_id in peer_ids:
+		var peer_id: int = int(raw_peer_id)
+		var round_points: int = _round_points_for_peer(peer_id)
+		_add_points_to_player(peer_id, round_points)
+		round_rows.append({
+			"peer_id": peer_id,
+			"name": get_player_name_for_peer(peer_id),
+			"round_points": round_points,
+			"total_points": _score_for_peer(peer_id)
+		})
+	var round_summary: Dictionary = {
+		"round": round_number,
+		"finishing_peer_id": finishing_peer_id,
+		"rows": round_rows
+	}
+	score_sheet_data.append(round_summary.duplicate(true))
+	latest_round_score_data = round_summary.duplicate(true)
+	return round_summary
 
 func open_claim_window(opened_by_peer_id: int, duration_seconds: int) -> int:
 	if not _is_server_authority():
@@ -594,6 +721,8 @@ func get_player_name(index: int) -> String:
 	return "unknown"
 
 func get_current_player_peer_id() -> int:
+	if game_over:
+		return -1
 	if current_player_peer_id != -1:
 		return current_player_peer_id
 	if player_order.is_empty():
@@ -670,6 +799,8 @@ func advance_to_next_round() -> void:
 	if not _is_server_authority():
 		return
 	if player_order.is_empty():
+		return
+	if game_over:
 		return
 	round_number += 1
 	increment_starting_player()
@@ -778,6 +909,27 @@ func apply_game_state(state: Dictionary) -> void:
 				"runs_of_7": int(round_requirement_dict.get("runs_of_7", 0)),
 				"all_cards": bool(round_requirement_dict.get("all_cards", false))
 			}
+	score_sheet_data.clear()
+	var score_sheet_raw: Variant = state.get("score_sheet", [])
+	if typeof(score_sheet_raw) == TYPE_ARRAY:
+		var score_sheet_array: Array = score_sheet_raw
+		for raw_round_score in score_sheet_array:
+			if typeof(raw_round_score) != TYPE_DICTIONARY:
+				continue
+			score_sheet_data.append((raw_round_score as Dictionary).duplicate(true))
+	latest_round_score_data.clear()
+	var latest_round_score_raw: Variant = state.get("latest_round_score", {})
+	if typeof(latest_round_score_raw) == TYPE_DICTIONARY:
+		var latest_round_score_dict: Dictionary = latest_round_score_raw
+		if not latest_round_score_dict.is_empty():
+			latest_round_score_data = latest_round_score_dict.duplicate(true)
+	game_over = bool(state.get("game_over", false))
+	winning_peer_ids.clear()
+	var winner_ids_raw: Variant = state.get("winner_peer_ids", [])
+	if typeof(winner_ids_raw) == TYPE_ARRAY:
+		var winner_ids_array: Array = winner_ids_raw
+		for raw_winner_id in winner_ids_array:
+			winning_peer_ids.append(int(raw_winner_id))
 	var discard_top_data: Variant = state.get("discard_top", {})
 	discard_pile.clear()
 	if typeof(discard_top_data) == TYPE_DICTIONARY:
@@ -886,6 +1038,189 @@ func _sync_put_down_status_for_players() -> void:
 	player_committed_melds = next_committed_melds
 	if _is_server_authority():
 		public_melds_data = serialize_public_melds()
+
+func _round_points_for_peer(peer_id: int) -> int:
+	var hand_cards: Array[Card] = get_hand_cards_for_peer(peer_id)
+	var total: int = 0
+	for card in hand_cards:
+		if card == null:
+			continue
+		var card_points: int = int(card.point_value)
+		if card_points <= 0:
+			card_points = _score_for_card_number(card.number)
+		total += card_points
+	return total
+
+func _score_for_card_number(number: int) -> int:
+	if card_point_rules != null:
+		return card_point_rules.get_points_for_number(number)
+	if number == 1:
+		return 15
+	if number == 2:
+		return 20
+	if number >= 3 and number <= 9:
+		return 5
+	if number >= 10 and number <= 13:
+		return 10
+	return 0
+
+func _add_points_to_player(peer_id: int, points: int) -> void:
+	if not players.has(peer_id):
+		return
+	var player_data: Variant = players[peer_id]
+	if player_data is Player:
+		var player: Player = player_data as Player
+		player.score = int(player.score) + points
+		return
+	if typeof(player_data) == TYPE_DICTIONARY:
+		var player_dict: Dictionary = player_data
+		player_dict["score"] = int(player_dict.get("score", 0)) + points
+		players[peer_id] = player_dict
+
+func _score_for_peer(peer_id: int) -> int:
+	if not players.has(peer_id):
+		return 0
+	var player_data: Variant = players[peer_id]
+	if player_data is Player:
+		return int((player_data as Player).score)
+	if typeof(player_data) == TYPE_DICTIONARY:
+		var player_dict: Dictionary = player_data
+		return int(player_dict.get("score", 0))
+	return 0
+
+func _calculate_winner_peer_ids() -> Array:
+	var winners: Array = []
+	var best_score: int = 2147483647
+	var peer_ids: Array = players.keys()
+	peer_ids.sort()
+	for raw_peer_id in peer_ids:
+		var peer_id: int = int(raw_peer_id)
+		var score: int = _score_for_peer(peer_id)
+		if score < best_score:
+			best_score = score
+			winners = [peer_id]
+		elif score == best_score:
+			winners.append(peer_id)
+	return winners
+
+func _reset_scoring_state() -> void:
+	score_sheet_data.clear()
+	latest_round_score_data.clear()
+	game_over = false
+	winning_peer_ids.clear()
+	for pid in players.keys():
+		var player_data: Variant = players[pid]
+		if player_data is Player:
+			(player_data as Player).score = 0
+		elif typeof(player_data) == TYPE_DICTIONARY:
+			var player_dict: Dictionary = player_data
+			player_dict["score"] = 0
+			players[pid] = player_dict
+
+func _load_card_point_rules(path: String = DEFAULT_CARD_POINT_RULES_PATH) -> void:
+	card_point_rules = null
+	var loaded_rules: Resource = load(path)
+	if loaded_rules is CardPointRules:
+		card_point_rules = loaded_rules as CardPointRules
+		_log_game("Loaded card point rules from %s." % path)
+		return
+	printerr("Failed to load card point rules from %s. Falling back to defaults." % path)
+	card_point_rules = CardPointRules.new()
+
+func _debug_player1_peer_id() -> int:
+	var peer_ids: Array = players.keys()
+	if peer_ids.is_empty():
+		return -1
+	peer_ids.sort()
+	return int(peer_ids[0])
+
+func _parse_debug_force_player1_cards() -> Array[Dictionary]:
+	var parsed_cards: Array[Dictionary] = []
+	var raw_cards_text: String = str(ProjectSettings.get_setting(DEBUG_FORCE_PLAYER1_HAND_CARDS_PATH, "")).strip_edges()
+	if raw_cards_text.is_empty():
+		return parsed_cards
+	var tokens: PackedStringArray = raw_cards_text.split(",", false)
+	for raw_token in tokens:
+		var token: String = String(raw_token).strip_edges().to_upper().replace(" ", "")
+		if token.is_empty():
+			continue
+		var parsed_card: Dictionary = _parse_debug_card_token(token)
+		if parsed_card.is_empty():
+			_log_game("Ignoring invalid debug card token '%s'. Expected like '5D' or 'AH'." % token)
+			continue
+		parsed_cards.append(parsed_card)
+	return parsed_cards
+
+func _parse_debug_card_token(token: String) -> Dictionary:
+	if token.length() < 2:
+		return {}
+	var suit_char: String = token.substr(token.length() - 1, 1)
+	var rank_text: String = token.substr(0, token.length() - 1)
+	var suit_value: int = _parse_debug_suit_char(suit_char)
+	var rank_value: int = _parse_debug_rank_text(rank_text)
+	if suit_value == -1 or rank_value == -1:
+		return {}
+	return {
+		"suit": suit_value,
+		"number": rank_value
+	}
+
+func _parse_debug_suit_char(suit_char: String) -> int:
+	match suit_char:
+		"H":
+			return Card.Suit.HEARTS
+		"D":
+			return Card.Suit.DIAMONDS
+		"C":
+			return Card.Suit.CLUBS
+		"S":
+			return Card.Suit.SPADES
+		_:
+			return -1
+
+func _parse_debug_rank_text(rank_text: String) -> int:
+	match rank_text:
+		"A":
+			return 1
+		"J":
+			return 11
+		"Q":
+			return 12
+		"K":
+			return 13
+		_:
+			var numeric_rank: int = int(rank_text)
+			if numeric_rank >= 1 and numeric_rank <= 13 and str(numeric_rank) == rank_text:
+				return numeric_rank
+			return -1
+
+func _extract_cards_from_deck_for_debug(requested_cards: Array[Dictionary]) -> Array[Card]:
+	var result: Array[Card] = []
+	if deck == null:
+		return result
+	var selected_indices: Array[int] = []
+	for requested in requested_cards:
+		var target_number: int = int(requested.get("number", -1))
+		var target_suit: int = int(requested.get("suit", -1))
+		var match_index: int = -1
+		for i in range(deck.cards.size()):
+			if selected_indices.has(i):
+				continue
+			var deck_card: Card = deck.cards[i]
+			if deck_card == null:
+				continue
+			if int(deck_card.suit) == target_suit and deck_card.number == target_number:
+				match_index = i
+				break
+		if match_index == -1:
+			return []
+		selected_indices.append(match_index)
+	selected_indices.sort()
+	for i in range(selected_indices.size() - 1, -1, -1):
+		var index_to_remove: int = selected_indices[i]
+		result.push_front(deck.cards[index_to_remove])
+		deck.cards.remove_at(index_to_remove)
+	return result
 
 func _build_default_put_down_progress() -> Dictionary:
 	return {
