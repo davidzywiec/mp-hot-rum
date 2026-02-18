@@ -81,16 +81,28 @@ func register_take_from_pile() -> void:
 		handler.register_take_from_pile(sender_peer_id)
 
 @rpc("any_peer")
+func register_pass_pile() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_pass_pile(sender_peer_id)
+
+@rpc("any_peer")
 func register_discard_card(card_data: Dictionary) -> void:
 	if handler is ServerHandler:
 		var sender_peer_id: int = multiplayer.get_remote_sender_id()
 		handler.register_discard_card(sender_peer_id, card_data)
 
 @rpc("any_peer")
-func register_pass_pile() -> void:
+func register_put_down(cards_data: Array) -> void:
 	if handler is ServerHandler:
 		var sender_peer_id: int = multiplayer.get_remote_sender_id()
-		handler.register_pass_pile(sender_peer_id)
+		handler.register_put_down(sender_peer_id, cards_data)
+
+@rpc("any_peer")
+func register_add_to_meld(meld_id: int, card_data: Dictionary) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_add_to_meld(sender_peer_id, meld_id, card_data)
 
 @rpc("any_peer")
 func register_claim_pile() -> void:

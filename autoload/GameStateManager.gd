@@ -8,7 +8,9 @@ signal countdown_toggle(flag: bool)
 signal countdown_sync(end_unix: int)
 signal game_state_updated(state: Dictionary)
 signal private_hand_updated(cards: Array)
+signal private_put_down_buffer_updated(cards: Array)
 signal pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool)
+signal put_down_error(message: String)
 
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 
@@ -136,6 +138,17 @@ func _args_shape_for_private_hand(maybe_cards: Variant) -> String:
 		return "two-arg"
 	return "one-arg"
 
+@rpc("authority")
+func receive_private_put_down_buffer(cards_data: Array) -> void:
+	GameManager.apply_private_put_down_buffer(cards_data)
+	emit_signal("private_put_down_buffer_updated", cards_data)
+
+func send_private_put_down_buffer(peer_id: int, cards_data: Array) -> void:
+	rpc_id(peer_id, "receive_private_put_down_buffer", cards_data)
+	if multiplayer.get_unique_id() == peer_id:
+		GameManager.apply_private_put_down_buffer(cards_data)
+		emit_signal("private_put_down_buffer_updated", cards_data)
+
 @rpc
 func receive_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
 	emit_signal("pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
@@ -143,3 +156,12 @@ func receive_pile_claimed_notification(claimant_peer_id: int, card_data: Diction
 func send_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
 	rpc("receive_pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
 	emit_signal("pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
+
+@rpc
+func receive_put_down_error(message: String) -> void:
+	emit_signal("put_down_error", message)
+
+func send_put_down_error(peer_id: int, message: String) -> void:
+	rpc_id(peer_id, "receive_put_down_error", message)
+	if multiplayer.get_unique_id() == peer_id:
+		emit_signal("put_down_error", message)

@@ -29,13 +29,11 @@ DevOverlay="*res://autoload/DevOverlay.gd"
 [debug]
 
 network_debug=true
-dev_overlay=true
 ui_debug=true
 short_countdown=true
 network_logs=true
 game_logs=true
 snapshot_logs=false
-start_round=7
 
 [display]
 

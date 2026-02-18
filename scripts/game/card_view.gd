@@ -16,6 +16,7 @@ const BASE_MARGIN_VERTICAL: int = 6
 
 var _card: Card
 var _last_scale: float = 1.0
+var _selected: bool = false
 
 func _ready() -> void:
 	_apply_style()
@@ -28,6 +29,16 @@ func set_card(card: Card) -> void:
 
 func get_card() -> Card:
 	return _card
+
+func set_selected(selected: bool) -> void:
+	_selected = selected
+	_apply_style()
+
+func is_selected() -> bool:
+	return _selected
+
+func toggle_selected() -> void:
+	set_selected(not _selected)
 
 func apply_scale_ratio(scale_ratio: float) -> void:
 	var safe_scale: float = maxf(0.01, scale_ratio)
@@ -77,9 +88,14 @@ func _refresh_content() -> void:
 
 func _apply_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.98, 0.98, 0.96)
-	style.border_color = Color(0.1, 0.1, 0.1)
-	style.set_border_width_all(2)
+	if _selected:
+		style.bg_color = Color(0.9, 0.95, 1.0)
+		style.border_color = Color(0.21, 0.55, 0.95)
+		style.set_border_width_all(3)
+	else:
+		style.bg_color = Color(0.98, 0.98, 0.96)
+		style.border_color = Color(0.1, 0.1, 0.1)
+		style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("panel", style)
 
