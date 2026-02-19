@@ -133,6 +133,8 @@ func toggle_countdown_timer(flag: bool) -> void:
 # NEW: react to server-ordered scene change
 func _on_change_scene(path: String) -> void:
 	var target: String = path if path != "" else next_scene_fallback
+	if not is_inside_tree():
+		return
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
