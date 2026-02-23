@@ -7,8 +7,6 @@ var hand_scroll: ScrollContainer = null
 var hand_container: HBoxContainer = null
 var hand_title: Label = null
 var end_turn_button: Button = null
-var draw_deck_button: Button = null
-var take_pile_button: Button = null
 var pass_pile_button: Button = null
 var claim_pile_button: Button = null
 var meld_board_button: Button = null
@@ -28,6 +26,11 @@ var pile_title_label: Label = null
 var pile_card_holder: CenterContainer = null
 var pile_card_view: CardView = null
 var round_rules_label: Label = null
+var turn_pickup_overlay: ColorRect = null
+var turn_pickup_title_label: Label = null
+var turn_pickup_status_label: Label = null
+var turn_pickup_deck_button: Button = null
+var turn_pickup_discard_button: Button = null
 var game_over_overlay: ColorRect = null
 var game_over_title_label: Label = null
 var game_over_status_label: Label = null
@@ -63,10 +66,6 @@ func _ready() -> void:
 	_resolve_hand_nodes()
 	if end_turn_button != null:
 		end_turn_button.pressed.connect(_on_end_turn_pressed)
-	if draw_deck_button != null:
-		draw_deck_button.pressed.connect(_on_draw_deck_pressed)
-	if take_pile_button != null:
-		take_pile_button.pressed.connect(_on_take_pile_pressed)
 	if pass_pile_button != null:
 		pass_pile_button.pressed.connect(_on_pass_pile_pressed)
 	if claim_pile_button != null:
@@ -83,6 +82,10 @@ func _ready() -> void:
 		discard_selected_button.pressed.connect(_on_discard_selected_pressed)
 	if clear_selection_button != null:
 		clear_selection_button.pressed.connect(_on_clear_selection_pressed)
+	if turn_pickup_deck_button != null:
+		turn_pickup_deck_button.pressed.connect(_on_turn_pickup_deck_pressed)
+	if turn_pickup_discard_button != null:
+		turn_pickup_discard_button.pressed.connect(_on_turn_pickup_discard_pressed)
 	if play_again_game_button != null:
 		play_again_game_button.pressed.connect(_on_play_again_game_pressed)
 	if leave_game_button != null:
@@ -94,6 +97,7 @@ func _ready() -> void:
 	_update_pile_view()
 	_update_round_rules_ui()
 	_update_game_over_overlay()
+	_update_turn_pickup_overlay()
 	_update_debug_controls_visibility()
 	_debug_turn_state("ready")
 	SignalManager.round_updated.connect(update_round_ui)
@@ -120,6 +124,7 @@ func _on_game_state_updated(state: Dictionary) -> void:
 	_update_pile_view()
 	_update_round_rules_ui()
 	_update_game_over_overlay()
+	_update_turn_pickup_overlay()
 	_update_staged_put_down_ui()
 	_refresh_meld_board_if_open()
 	_refresh_score_sheet_if_open()
@@ -146,6 +151,7 @@ func update_round_ui(round: int, current_player_name: String) -> void:
 	_update_pile_view()
 	_update_round_rules_ui()
 	_update_game_over_overlay()
+	_update_turn_pickup_overlay()
 	_refresh_score_sheet_if_open()
 	_debug_turn_state("update_round_ui")
 
@@ -188,6 +194,7 @@ func _render_local_hand() -> void:
 	_update_claim_status_label()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_turn_pickup_overlay()
 	_update_staged_put_down_ui()
 
 func _on_card_gui_input(event: InputEvent, card_view: CardView) -> void:
@@ -365,8 +372,6 @@ func _resolve_hand_nodes() -> void:
 
 	hand_title = get_node_or_null("RoundDataContainer/HandTitle") as Label
 	end_turn_button = get_node_or_null("RoundDataContainer/EndTurnButton") as Button
-	draw_deck_button = get_node_or_null("RoundDataContainer/ActionBar/DrawDeckButton") as Button
-	take_pile_button = get_node_or_null("RoundDataContainer/ActionBar/TakePileButton") as Button
 	pass_pile_button = get_node_or_null("RoundDataContainer/ActionBar/PassPileButton") as Button
 	claim_pile_button = get_node_or_null("RoundDataContainer/ActionBar/ClaimPileButton") as Button
 	meld_board_button = get_node_or_null("RoundDataContainer/ActionBar/MeldBoardButton") as Button
@@ -383,6 +388,11 @@ func _resolve_hand_nodes() -> void:
 	pile_title_label = get_node_or_null("RoundDataContainer/PileContainer/PileTitle") as Label
 	pile_card_holder = get_node_or_null("RoundDataContainer/PileContainer/PileCardHolder") as CenterContainer
 	round_rules_label = get_node_or_null("RoundDataContainer/RoundRulesPanel/RoundRulesLabel") as Label
+	turn_pickup_overlay = get_node_or_null("RoundDataContainer/TurnPickupOverlay") as ColorRect
+	turn_pickup_title_label = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/TitleLabel") as Label
+	turn_pickup_status_label = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/StatusLabel") as Label
+	turn_pickup_deck_button = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/Buttons/PickupDeckButton") as Button
+	turn_pickup_discard_button = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/Buttons/PickupDiscardButton") as Button
 	game_over_overlay = get_node_or_null("RoundDataContainer/GameOverOverlay") as ColorRect
 	game_over_title_label = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/TitleLabel") as Label
 	game_over_status_label = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/StatusLabel") as Label
@@ -730,18 +740,10 @@ func _update_end_turn_button_state() -> void:
 
 func _update_action_buttons_state() -> void:
 	_prune_selected_cards()
-	var is_turn: bool = _is_local_players_turn()
-	var claim_active: bool = GameManager.claim_window_active
-	var has_pile_card: bool = GameManager.get_discard_top_card() != null
-	var turn_pickup_completed: bool = GameManager.turn_pickup_completed
 	var turn_discard_completed: bool = GameManager.turn_discard_completed
 	var can_put_down: bool = _can_local_put_down()
 	var selected_count: int = _selected_cards.size()
 
-	if draw_deck_button != null:
-		draw_deck_button.disabled = not (is_turn and not claim_active and not turn_pickup_completed)
-	if take_pile_button != null:
-		take_pile_button.disabled = not (is_turn and not claim_active and has_pile_card and not turn_pickup_completed)
 	if pass_pile_button != null:
 		pass_pile_button.disabled = not _can_local_pass_claim_offer()
 	if claim_pile_button != null:
@@ -754,6 +756,7 @@ func _update_action_buttons_state() -> void:
 		clear_selection_button.disabled = selected_count <= 0
 	if debug_end_game_button != null:
 		debug_end_game_button.disabled = GameManager.game_over
+	_update_turn_pickup_overlay()
 
 func _can_local_end_turn() -> bool:
 	if GameManager.game_over:
@@ -841,9 +844,60 @@ func _can_local_pass_claim_offer() -> bool:
 		return false
 	return not _is_local_players_turn()
 
+func _should_show_turn_pickup_overlay() -> bool:
+	if GameManager.game_over:
+		return false
+	if GameManager.claim_window_active:
+		return false
+	if GameManager.turn_pickup_completed:
+		return false
+	return _is_local_players_turn()
+
+func _update_turn_pickup_overlay() -> void:
+	if turn_pickup_overlay == null:
+		return
+	var show_overlay: bool = _should_show_turn_pickup_overlay()
+	turn_pickup_overlay.visible = show_overlay
+	if not show_overlay:
+		return
+	if turn_pickup_title_label != null:
+		turn_pickup_title_label.text = "Your Turn"
+	var has_pile_card: bool = GameManager.get_discard_top_card() != null
+	if turn_pickup_status_label != null:
+		if has_pile_card:
+			turn_pickup_status_label.text = "Pick up from deck or discard pile."
+		else:
+			turn_pickup_status_label.text = "Discard pile is empty. Pick up from deck."
+	if turn_pickup_deck_button != null:
+		turn_pickup_deck_button.disabled = false
+	if turn_pickup_discard_button != null:
+		turn_pickup_discard_button.disabled = not has_pile_card
+
+func _on_turn_pickup_deck_pressed() -> void:
+	if not _should_show_turn_pickup_overlay():
+		_update_turn_pickup_overlay()
+		return
+	if turn_pickup_deck_button != null:
+		turn_pickup_deck_button.disabled = true
+	if turn_pickup_discard_button != null:
+		turn_pickup_discard_button.disabled = true
+	_on_draw_deck_pressed()
+	call_deferred("_update_turn_pickup_overlay")
+
+func _on_turn_pickup_discard_pressed() -> void:
+	if not _should_show_turn_pickup_overlay():
+		_update_turn_pickup_overlay()
+		return
+	if turn_pickup_deck_button != null:
+		turn_pickup_deck_button.disabled = true
+	if turn_pickup_discard_button != null:
+		turn_pickup_discard_button.disabled = true
+	_on_take_pile_pressed()
+	call_deferred("_update_turn_pickup_overlay")
+
 func _on_draw_deck_pressed() -> void:
-	if draw_deck_button != null:
-		draw_deck_button.disabled = true
+	if not _should_show_turn_pickup_overlay():
+		return
 	if multiplayer.is_server() or OS.has_feature("server"):
 		if Network_Manager.handler is ServerHandler:
 			var local_peer_id: int = multiplayer.get_unique_id()
@@ -853,8 +907,8 @@ func _on_draw_deck_pressed() -> void:
 			Network_Manager.rpc_id(1, "register_draw_from_deck")
 
 func _on_take_pile_pressed() -> void:
-	if take_pile_button != null:
-		take_pile_button.disabled = true
+	if not _should_show_turn_pickup_overlay():
+		return
 	if multiplayer.is_server() or OS.has_feature("server"):
 		if Network_Manager.handler is ServerHandler:
 			var local_peer_id: int = multiplayer.get_unique_id()
