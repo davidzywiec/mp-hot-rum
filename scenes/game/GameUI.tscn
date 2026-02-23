@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://ch1dgmbxltdv8"]
+[gd_scene load_steps=5 format=3 uid="uid://ch1dgmbxltdv8"]
 
 [ext_resource type="Script" uid="uid://dghdt6tbxbaex" path="res://scripts/game/game_ui.gd" id="1_kofqh"]
 [ext_resource type="Theme" uid="uid://ddgkq8lj3umuh" path="res://Themes/GameUI.tres" id="2_t5mpo"]
@@ -14,6 +14,13 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hand_area"]
+bg_color = Color(0.0705882, 0.101961, 0.160784, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [node name="GameUI" type="Control"]
 layout_mode = 3
@@ -55,79 +62,108 @@ grow_vertical = 2
 text = "Round requirements..."
 autowrap_mode = 3
 
-[node name="HandTitle" type="Label" parent="RoundDataContainer"]
+[node name="HandAreaPanel" type="PanelContainer" parent="RoundDataContainer"]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = -172.0
+offset_top = -216.0
 offset_right = -10.0
-offset_bottom = -148.0
+offset_bottom = -10.0
 grow_vertical = 0
-text = "Your Hand (0)"
-horizontal_alignment = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_hand_area")
 
-[node name="EndTurnButton" type="Button" parent="RoundDataContainer"]
+[node name="ContentMargin" type="MarginContainer" parent="RoundDataContainer/HandAreaPanel"]
 layout_mode = 1
-anchor_left = 1.0
-anchor_top = 1.0
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -124.0
-offset_top = -188.0
-offset_right = -10.0
-offset_bottom = -148.0
-grow_horizontal = 0
-grow_vertical = 0
-text = "End Turn"
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
 
-[node name="ActionBar" type="HBoxContainer" parent="RoundDataContainer"]
+[node name="HandAreaVB" type="VBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="HBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HandTitle" type="Label" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Your Hand"
+
+[node name="HandCountLabel" type="Label" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/Header"]
+layout_mode = 2
+text = "0 cards"
+horizontal_alignment = 2
+
+[node name="BottomControlsBar" type="HBoxContainer" parent="RoundDataContainer"]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = -188.0
-offset_right = -140.0
-offset_bottom = -148.0
+offset_top = -260.0
+offset_right = -10.0
+offset_bottom = -220.0
 grow_vertical = 0
 theme_override_constants/separation = 8
 
-[node name="PassPileButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="ActionBar" type="HBoxContainer" parent="RoundDataContainer/BottomControlsBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="PassPileButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Pass Pile"
 
-[node name="ClaimPileButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="ClaimPileButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Claim Pile"
 
-[node name="MeldBoardButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="MeldBoardButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Meld Board"
 
-[node name="ScoreSheetButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="ScoreSheetButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Score Sheet"
 
-[node name="DebugEndGameButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="DebugEndGameButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 visible = false
 layout_mode = 2
 text = "Debug End Game"
 
-[node name="PutDownButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="PutDownButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Put Down"
 
-[node name="DiscardSelectedButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="DiscardSelectedButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Discard Sel"
 
-[node name="ClearSelectionButton" type="Button" parent="RoundDataContainer/ActionBar"]
+[node name="ClearSelectionButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Clear Sel"
+
+[node name="EndTurnButton" type="Button" parent="RoundDataContainer/BottomControlsBar"]
+layout_mode = 2
+text = "End Turn"
 
 [node name="TurnPickupOverlay" type="ColorRect" parent="RoundDataContainer"]
 visible = false
@@ -197,9 +233,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = -214.0
+offset_top = -288.0
 offset_right = -10.0
-offset_bottom = -190.0
+offset_bottom = -264.0
 grow_vertical = 0
 text = ""
 horizontal_alignment = 1
@@ -212,9 +248,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = -288.0
+offset_top = -362.0
 offset_right = -10.0
-offset_bottom = -218.0
+offset_bottom = -292.0
 grow_vertical = 0
 
 [node name="VB" type="VBoxContainer" parent="RoundDataContainer/StagedAreaPanel"]
@@ -262,23 +298,20 @@ horizontal_alignment = 1
 layout_mode = 2
 custom_minimum_size = Vector2(100, 132)
 
-[node name="HandScroll" type="ScrollContainer" parent="RoundDataContainer"]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = -144.0
-offset_right = -10.0
-offset_bottom = -10.0
-grow_vertical = 0
+[node name="CardsSpacer" type="Control" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HandScroll" type="ScrollContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 132)
 follow_focus = true
 
-[node name="HandContainer" type="HBoxContainer" parent="RoundDataContainer/HandScroll"]
+[node name="HandContainer" type="HBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll"]
 layout_mode = 2
-theme_override_constants/separation = 4
-alignment = 0
+theme_override_constants/separation = 5
+alignment = 1
 
 [node name="MC" type="MarginContainer" parent="RoundDataContainer"]
 layout_mode = 1

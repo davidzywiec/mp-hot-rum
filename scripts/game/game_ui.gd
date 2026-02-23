@@ -6,6 +6,7 @@ extends Control
 var hand_scroll: ScrollContainer = null
 var hand_container: HBoxContainer = null
 var hand_title: Label = null
+var hand_count_label: Label = null
 var end_turn_button: Button = null
 var pass_pile_button: Button = null
 var claim_pile_button: Button = null
@@ -40,6 +41,7 @@ var leave_game_button: Button = null
 
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/game/CardView.tscn")
 const BASE_HAND_SPACING: float = 4.0
+const HAND_CARD_SPACING: float = 5.0
 const STAGED_CARD_SCALE: float = 0.55
 const PILE_CARD_SCALE: float = 1.0
 const TURN_DEBUG: bool = true
@@ -172,10 +174,16 @@ func _render_local_hand() -> void:
 		child.queue_free()
 	var my_peer_id: int = multiplayer.get_unique_id()
 	if not GameManager.player_hands.has(my_peer_id):
-		hand_title.text = "Your Hand (0)"
+		if hand_title != null:
+			hand_title.text = "Your Hand"
+		if hand_count_label != null:
+			hand_count_label.text = "0 cards"
 		return
 	var cards: Array = GameManager.player_hands[my_peer_id]
-	hand_title.text = "Your Hand (%d)" % cards.size()
+	if hand_title != null:
+		hand_title.text = "Your Hand"
+	if hand_count_label != null:
+		hand_count_label.text = "%d cards" % cards.size()
 	for c in cards:
 		if not (c is Card):
 			continue
@@ -186,7 +194,7 @@ func _render_local_hand() -> void:
 		card_view.set_card(c)
 		card_view.apply_scale_ratio(1.0)
 		card_view.gui_input.connect(_on_card_gui_input.bind(card_view))
-	hand_container.add_theme_constant_override("separation", int(BASE_HAND_SPACING))
+	hand_container.add_theme_constant_override("separation", int(HAND_CARD_SPACING))
 	if hand_scroll != null:
 		hand_scroll.scroll_horizontal = 0
 	_update_end_turn_button_state()
@@ -370,16 +378,17 @@ func _resolve_hand_nodes() -> void:
 	if round_data == null:
 		return
 
-	hand_title = get_node_or_null("RoundDataContainer/HandTitle") as Label
-	end_turn_button = get_node_or_null("RoundDataContainer/EndTurnButton") as Button
-	pass_pile_button = get_node_or_null("RoundDataContainer/ActionBar/PassPileButton") as Button
-	claim_pile_button = get_node_or_null("RoundDataContainer/ActionBar/ClaimPileButton") as Button
-	meld_board_button = get_node_or_null("RoundDataContainer/ActionBar/MeldBoardButton") as Button
-	score_sheet_button = get_node_or_null("RoundDataContainer/ActionBar/ScoreSheetButton") as Button
-	debug_end_game_button = get_node_or_null("RoundDataContainer/ActionBar/DebugEndGameButton") as Button
-	put_down_button = get_node_or_null("RoundDataContainer/ActionBar/PutDownButton") as Button
-	discard_selected_button = get_node_or_null("RoundDataContainer/ActionBar/DiscardSelectedButton") as Button
-	clear_selection_button = get_node_or_null("RoundDataContainer/ActionBar/ClearSelectionButton") as Button
+	hand_title = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/Header/HandTitle") as Label
+	hand_count_label = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/Header/HandCountLabel") as Label
+	end_turn_button = get_node_or_null("RoundDataContainer/BottomControlsBar/EndTurnButton") as Button
+	pass_pile_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/PassPileButton") as Button
+	claim_pile_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ClaimPileButton") as Button
+	meld_board_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/MeldBoardButton") as Button
+	score_sheet_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ScoreSheetButton") as Button
+	debug_end_game_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/DebugEndGameButton") as Button
+	put_down_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/PutDownButton") as Button
+	discard_selected_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/DiscardSelectedButton") as Button
+	clear_selection_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ClearSelectionButton") as Button
 	claim_status_label = get_node_or_null("RoundDataContainer/ClaimStatusLabel") as Label
 	staged_panel = get_node_or_null("RoundDataContainer/StagedAreaPanel") as PanelContainer
 	staged_title_label = get_node_or_null("RoundDataContainer/StagedAreaPanel/VB/StagedAreaTitle") as Label
@@ -400,10 +409,34 @@ func _resolve_hand_nodes() -> void:
 	play_again_game_button = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons/PlayAgainButton") as Button
 	leave_game_button = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons/LeaveGameButton") as Button
 
-	hand_scroll = get_node_or_null("RoundDataContainer/HandScroll") as ScrollContainer
-	hand_container = get_node_or_null("RoundDataContainer/HandScroll/HandContainer") as HBoxContainer
+	hand_scroll = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll") as ScrollContainer
+	hand_container = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll/HandContainer") as HBoxContainer
 
 	# Backward-compatible fallback if a scene still uses direct HandContainer.
+	if hand_title == null:
+		hand_title = get_node_or_null("RoundDataContainer/HandTitle") as Label
+	if end_turn_button == null:
+		end_turn_button = get_node_or_null("RoundDataContainer/EndTurnButton") as Button
+	if pass_pile_button == null:
+		pass_pile_button = get_node_or_null("RoundDataContainer/ActionBar/PassPileButton") as Button
+	if claim_pile_button == null:
+		claim_pile_button = get_node_or_null("RoundDataContainer/ActionBar/ClaimPileButton") as Button
+	if meld_board_button == null:
+		meld_board_button = get_node_or_null("RoundDataContainer/ActionBar/MeldBoardButton") as Button
+	if score_sheet_button == null:
+		score_sheet_button = get_node_or_null("RoundDataContainer/ActionBar/ScoreSheetButton") as Button
+	if debug_end_game_button == null:
+		debug_end_game_button = get_node_or_null("RoundDataContainer/ActionBar/DebugEndGameButton") as Button
+	if put_down_button == null:
+		put_down_button = get_node_or_null("RoundDataContainer/ActionBar/PutDownButton") as Button
+	if discard_selected_button == null:
+		discard_selected_button = get_node_or_null("RoundDataContainer/ActionBar/DiscardSelectedButton") as Button
+	if clear_selection_button == null:
+		clear_selection_button = get_node_or_null("RoundDataContainer/ActionBar/ClearSelectionButton") as Button
+	if hand_scroll == null:
+		hand_scroll = get_node_or_null("RoundDataContainer/HandScroll") as ScrollContainer
+	if hand_container == null:
+		hand_container = get_node_or_null("RoundDataContainer/HandScroll/HandContainer") as HBoxContainer
 	if hand_container == null:
 		hand_container = get_node_or_null("RoundDataContainer/HandContainer") as HBoxContainer
 
