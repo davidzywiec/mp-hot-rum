@@ -14,12 +14,17 @@ var label_timer_scene: PackedScene = preload("res://scenes/utility/CountdownLabe
 var label_timer: Node = label_timer_scene.instantiate()
 var ready_status: bool = false
 var is_host: bool = false
+var _button_style_normal: StyleBoxFlat = null
+var _button_style_hover: StyleBoxFlat = null
+var _button_style_pressed: StyleBoxFlat = null
+var _button_style_disabled: StyleBoxFlat = null
 
 var countdown_connection_done: bool = false
 @export var next_scene_fallback: String = "res://scenes/menu/main_menu.tscn" # used only if server sends same
 
 
 func _ready() -> void:
+	_apply_card_button_theme_to_tree(self)
 	set_ui_actions(false)
 	ready_btn.pressed.connect(set_ready_flag)
 	start_btn.pressed.connect(start_game)
@@ -146,3 +151,64 @@ func _on_change_scene(path: String) -> void:
 func _on_host_changed(host_peer_id: int) -> void:
 	var me: int = multiplayer.get_unique_id()
 	is_host = (me == host_peer_id)
+
+func _apply_card_button_theme_to_tree(root: Node) -> void:
+	if root == null:
+		return
+	if root is Button:
+		_style_card_button(root as Button)
+	for child in root.get_children():
+		_apply_card_button_theme_to_tree(child)
+
+func _style_card_button(button: Button) -> void:
+	if button == null:
+		return
+	_ensure_card_button_styles()
+	button.add_theme_stylebox_override("normal", _button_style_normal)
+	button.add_theme_stylebox_override("hover", _button_style_hover)
+	button.add_theme_stylebox_override("pressed", _button_style_pressed)
+	button.add_theme_stylebox_override("focus", _button_style_hover)
+	button.add_theme_stylebox_override("disabled", _button_style_disabled)
+	button.add_theme_color_override("font_color", Color(0.93, 0.95, 0.98, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(0.98, 0.99, 1.0, 1.0))
+	button.add_theme_color_override("font_pressed_color", Color(1, 1, 1, 1))
+	button.add_theme_color_override("font_disabled_color", Color(0.52, 0.56, 0.62, 1.0))
+	button.add_theme_color_override("font_focus_color", Color(0.98, 0.99, 1.0, 1.0))
+
+func _ensure_card_button_styles() -> void:
+	if _button_style_normal != null:
+		return
+	_button_style_normal = _make_button_style(
+		Color(0.102, 0.157, 0.239, 0.94),
+		Color(0.168, 0.227, 0.329, 1.0)
+	)
+	_button_style_hover = _make_button_style(
+		Color(0.125, 0.188, 0.286, 0.97),
+		Color(0.235, 0.313, 0.447, 1.0)
+	)
+	_button_style_pressed = _make_button_style(
+		Color(0.082, 0.129, 0.204, 1.0),
+		Color(0.219, 0.298, 0.431, 1.0)
+	)
+	_button_style_disabled = _make_button_style(
+		Color(0.090, 0.110, 0.145, 0.88),
+		Color(0.148, 0.168, 0.211, 0.9)
+	)
+
+func _make_button_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_right = 10
+	style.corner_radius_bottom_left = 10
+	style.content_margin_left = 12
+	style.content_margin_top = 7
+	style.content_margin_right = 12
+	style.content_margin_bottom = 7
+	return style

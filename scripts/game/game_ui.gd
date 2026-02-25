@@ -1,7 +1,7 @@
 extends Control
 
-@onready var round_number_label : RichTextLabel = $RoundDataContainer/MC/VBCRoundData/RoundNumberContainer/RoundNumber
-@onready var current_player_label : RichTextLabel = $RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer/CurrentPlayer
+@onready var round_number_label : RichTextLabel = $RoundDataContainer/MC/VBCRoundData/RoundNumberContainer/RoundNumberMargin/RoundNumber
+@onready var current_player_label : RichTextLabel = $RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer/CurrentPlayerMargin/CurrentPlayer
 
 var hand_scroll: ScrollContainer = null
 var hand_container: HBoxContainer = null
@@ -12,6 +12,7 @@ var pass_pile_button: Button = null
 var claim_pile_button: Button = null
 var meld_board_button: Button = null
 var score_sheet_button: Button = null
+var round_rules_button: Button = null
 var debug_end_game_button: Button = null
 var put_down_button: Button = null
 var discard_selected_button: Button = null
@@ -61,8 +62,14 @@ var _meld_board_scroll: ScrollContainer = null
 var _meld_board_list: VBoxContainer = null
 var _score_sheet_popup: AcceptDialog = null
 var _score_sheet_text: RichTextLabel = null
+var _round_rules_popup: AcceptDialog = null
+var _round_rules_popup_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
 var _play_again_vote_peer_ids: Array[int] = []
+var _button_style_normal: StyleBoxFlat = null
+var _button_style_hover: StyleBoxFlat = null
+var _button_style_pressed: StyleBoxFlat = null
+var _button_style_disabled: StyleBoxFlat = null
 
 func _ready() -> void:
 	_resolve_hand_nodes()
@@ -76,6 +83,8 @@ func _ready() -> void:
 		meld_board_button.pressed.connect(_on_meld_board_pressed)
 	if score_sheet_button != null:
 		score_sheet_button.pressed.connect(_on_score_sheet_pressed)
+	if round_rules_button != null:
+		round_rules_button.pressed.connect(_on_round_rules_pressed)
 	if debug_end_game_button != null:
 		debug_end_game_button.pressed.connect(_on_debug_end_game_pressed)
 	if put_down_button != null:
@@ -101,6 +110,7 @@ func _ready() -> void:
 	_update_game_over_overlay()
 	_update_turn_pickup_overlay()
 	_update_debug_controls_visibility()
+	_apply_card_button_theme_to_tree(self)
 	_debug_turn_state("ready")
 	SignalManager.round_updated.connect(update_round_ui)
 	Game_State_Manager.game_state_updated.connect(_on_game_state_updated)
@@ -142,11 +152,12 @@ func pull_round_ui() -> void:
 
 func update_round_ui(round: int, current_player_name: String) -> void:
 	print("Updating round UI: Round %d, Current Player: %s" % [round, current_player_name])
+	var safe_player_name: String = current_player_name.replace("[", "\\[").replace("]", "\\]")
 	round_number_label.clear()
-	round_number_label.parse_bbcode("[b]Round: [/b]%d" % round)
+	round_number_label.parse_bbcode("[color=#A2AFBF][font_size=12][b]#  ROUND[/b][/font_size][/color]\n[font_size=28][b]%d[/b][/font_size]" % round)
 	
 	current_player_label.clear()
-	current_player_label.parse_bbcode("[b]Current Player: [/b]%s" % current_player_name)
+	current_player_label.parse_bbcode("[color=#A2AFBF][font_size=12][b]CURRENT TURN[/b][/font_size][/color]\n[font_size=18][b]%s[/b][/font_size]" % safe_player_name)
 	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
@@ -385,6 +396,7 @@ func _resolve_hand_nodes() -> void:
 	claim_pile_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ClaimPileButton") as Button
 	meld_board_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/MeldBoardButton") as Button
 	score_sheet_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ScoreSheetButton") as Button
+	round_rules_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/RoundRulesButton") as Button
 	debug_end_game_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/DebugEndGameButton") as Button
 	put_down_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/PutDownButton") as Button
 	discard_selected_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/DiscardSelectedButton") as Button
@@ -425,6 +437,8 @@ func _resolve_hand_nodes() -> void:
 		meld_board_button = get_node_or_null("RoundDataContainer/ActionBar/MeldBoardButton") as Button
 	if score_sheet_button == null:
 		score_sheet_button = get_node_or_null("RoundDataContainer/ActionBar/ScoreSheetButton") as Button
+	if round_rules_button == null:
+		round_rules_button = get_node_or_null("RoundDataContainer/ActionBar/RoundRulesButton") as Button
 	if debug_end_game_button == null:
 		debug_end_game_button = get_node_or_null("RoundDataContainer/ActionBar/DebugEndGameButton") as Button
 	if put_down_button == null:
@@ -556,16 +570,18 @@ func _ensure_pile_card_view() -> CardView:
 	return pile_card_view
 
 func _update_round_rules_ui() -> void:
-	if round_rules_label == null:
-		return
+	var rules_text: String = _build_round_rules_text()
+	if round_rules_label != null:
+		round_rules_label.text = rules_text
+	_refresh_round_rules_popup_if_open()
+
+func _build_round_rules_text() -> String:
 	var round_num: int = int(GameManager.round_number)
 	var requirement: Dictionary = GameManager.get_current_round_requirement_dict()
 	if GameManager.game_over:
-		round_rules_label.text = "Game Over\nOpen Score Sheet for final standings."
-		return
+		return "Game Over\nOpen Score Sheet for final standings."
 	if requirement.is_empty():
-		round_rules_label.text = "Round %d Requirements\nWaiting for rules from server..." % round_num
-		return
+		return "Round %d Requirements\nWaiting for rules from server..." % round_num
 
 	var sets_required: int = int(requirement.get("sets_of_3", 0))
 	var runs4_required: int = int(requirement.get("runs_of_4", 0))
@@ -609,7 +625,7 @@ func _update_round_rules_ui() -> void:
 	if local_peer_id > 0 and GameManager.has_player_put_down(local_peer_id):
 		put_down_status_text = "Complete"
 
-	round_rules_label.text = "Round %d Put Down Slots\n%s\nGo down when all slots are filled in one turn.\nRules: no duplicate set rank, no duplicate run suit\nAll cards required: %s\nWild cards: 2s\nYour put down: %s" % [
+	return "Round %d Put Down Slots\n%s\nGo down when all slots are filled in one turn.\nRules: no duplicate set rank, no duplicate run suit\nAll cards required: %s\nWild cards: 2s\nYour put down: %s" % [
 		round_num,
 		slots_text,
 		all_cards_text,
@@ -1049,6 +1065,12 @@ func _on_score_sheet_pressed() -> void:
 	if _score_sheet_popup != null:
 		_score_sheet_popup.popup_centered(Vector2i(760, 460))
 
+func _on_round_rules_pressed() -> void:
+	_ensure_round_rules_popup()
+	_refresh_round_rules_popup()
+	if _round_rules_popup != null:
+		_round_rules_popup.popup_centered(Vector2i(760, 420))
+
 func _on_debug_end_game_pressed() -> void:
 	if GameManager.game_over:
 		return
@@ -1094,6 +1116,13 @@ func _refresh_score_sheet_if_open() -> void:
 		return
 	_refresh_score_sheet_popup()
 
+func _refresh_round_rules_popup_if_open() -> void:
+	if _round_rules_popup == null:
+		return
+	if not _round_rules_popup.visible:
+		return
+	_refresh_round_rules_popup()
+
 func _disconnect_and_return_to_menu() -> void:
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
@@ -1124,6 +1153,7 @@ func _ensure_meld_board_popup() -> void:
 	scroll.add_child(list)
 	popup.add_child(scroll)
 	add_child(popup)
+	_apply_card_button_theme_to_tree(popup)
 	_meld_board_popup = popup
 	_meld_board_scroll = scroll
 	_meld_board_list = list
@@ -1143,8 +1173,35 @@ func _ensure_score_sheet_popup() -> void:
 	score_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	popup.add_child(score_text)
 	add_child(popup)
+	_apply_card_button_theme_to_tree(popup)
 	_score_sheet_popup = popup
 	_score_sheet_text = score_text
+
+func _ensure_round_rules_popup() -> void:
+	if _round_rules_popup != null:
+		return
+	var popup: AcceptDialog = AcceptDialog.new()
+	popup.title = "Current Round Rules"
+	popup.exclusive = false
+	var rules_text: RichTextLabel = RichTextLabel.new()
+	rules_text.custom_minimum_size = Vector2(720, 320)
+	rules_text.scroll_active = true
+	rules_text.bbcode_enabled = false
+	rules_text.fit_content = false
+	rules_text.selection_enabled = true
+	rules_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	popup.add_child(rules_text)
+	add_child(popup)
+	_apply_card_button_theme_to_tree(popup)
+	_round_rules_popup = popup
+	_round_rules_popup_text = rules_text
+
+func _refresh_round_rules_popup() -> void:
+	if _round_rules_popup_text == null:
+		return
+	_round_rules_popup_text.clear()
+	_round_rules_popup_text.add_text(_build_round_rules_text())
+	_round_rules_popup_text.scroll_to_line(0)
 
 func _refresh_score_sheet_popup() -> void:
 	if _score_sheet_text == null:
@@ -1198,6 +1255,7 @@ func _refresh_meld_board() -> void:
 			add_button.text = "Add Selected"
 			add_button.disabled = _selected_cards_payload().size() != 1
 			add_button.pressed.connect(_on_add_selected_to_meld_pressed.bind(meld_id))
+			_style_card_button(add_button)
 			content.add_child(add_button)
 
 		_meld_board_list.add_child(panel)
@@ -1312,6 +1370,68 @@ func _update_claim_status_label() -> void:
 	var card_text: String = _card_to_short_text(GameManager.get_discard_top_card())
 	claim_status_label.text = "Claim window: %ds for %s" % [remaining, card_text]
 
+func _apply_card_button_theme_to_tree(root: Node) -> void:
+	if root == null:
+		return
+	if root is Button:
+		_style_card_button(root as Button)
+	for child in root.get_children():
+		_apply_card_button_theme_to_tree(child)
+
+func _style_card_button(button: Button) -> void:
+	if button == null:
+		return
+	_ensure_card_button_styles()
+	button.add_theme_stylebox_override("normal", _button_style_normal)
+	button.add_theme_stylebox_override("hover", _button_style_hover)
+	button.add_theme_stylebox_override("pressed", _button_style_pressed)
+	button.add_theme_stylebox_override("focus", _button_style_hover)
+	button.add_theme_stylebox_override("disabled", _button_style_disabled)
+	button.add_theme_color_override("font_color", Color(0.93, 0.95, 0.98, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(0.98, 0.99, 1.0, 1.0))
+	button.add_theme_color_override("font_pressed_color", Color(1, 1, 1, 1))
+	button.add_theme_color_override("font_disabled_color", Color(0.52, 0.56, 0.62, 1.0))
+	button.add_theme_color_override("font_focus_color", Color(0.98, 0.99, 1.0, 1.0))
+	button.add_theme_constant_override("h_separation", 6)
+
+func _ensure_card_button_styles() -> void:
+	if _button_style_normal != null:
+		return
+	_button_style_normal = _make_button_style(
+		Color(0.102, 0.157, 0.239, 0.94),
+		Color(0.168, 0.227, 0.329, 1.0)
+	)
+	_button_style_hover = _make_button_style(
+		Color(0.125, 0.188, 0.286, 0.97),
+		Color(0.235, 0.313, 0.447, 1.0)
+	)
+	_button_style_pressed = _make_button_style(
+		Color(0.082, 0.129, 0.204, 1.0),
+		Color(0.219, 0.298, 0.431, 1.0)
+	)
+	_button_style_disabled = _make_button_style(
+		Color(0.090, 0.110, 0.145, 0.88),
+		Color(0.148, 0.168, 0.211, 0.9)
+	)
+
+func _make_button_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_right = 10
+	style.corner_radius_bottom_left = 10
+	style.content_margin_left = 12
+	style.content_margin_top = 7
+	style.content_margin_right = 12
+	style.content_margin_bottom = 7
+	return style
+
 func _on_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
 	_ensure_claim_popup()
 	if claim_popup == null:
@@ -1343,6 +1463,7 @@ func _ensure_claim_popup() -> void:
 	popup.title = "Pile Claimed"
 	popup.exclusive = true
 	add_child(popup)
+	_apply_card_button_theme_to_tree(popup)
 	claim_popup = popup
 
 func _ensure_put_down_error_popup() -> void:
@@ -1352,6 +1473,7 @@ func _ensure_put_down_error_popup() -> void:
 	popup.title = "Invalid Put Down"
 	popup.exclusive = true
 	add_child(popup)
+	_apply_card_button_theme_to_tree(popup)
 	put_down_error_popup = popup
 
 func _player_name_from_peer_id(peer_id: int) -> String:

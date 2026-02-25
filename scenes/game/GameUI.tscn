@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://ch1dgmbxltdv8"]
+[gd_scene load_steps=8 format=3 uid="uid://ch1dgmbxltdv8"]
 
 [ext_resource type="Script" uid="uid://dghdt6tbxbaex" path="res://scripts/game/game_ui.gd" id="1_kofqh"]
 [ext_resource type="Theme" uid="uid://ddgkq8lj3umuh" path="res://Themes/GameUI.tres" id="2_t5mpo"]
@@ -22,6 +22,24 @@ corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status_card"]
+bg_color = Color(0.101961, 0.156863, 0.239216, 0.95)
+border_color = Color(0.168627, 0.227451, 0.329412, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="Shader" id="Shader_ui_background_gradient"]
+code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec2 uv = UV;\n\tvec3 base = vec3(0.082, 0.086, 0.102);\n\tvec3 deep_blue = vec3(0.035, 0.094, 0.235);\n\tvec3 mid_blue = vec3(0.095, 0.165, 0.310);\n\tvec3 slate = vec3(0.120, 0.170, 0.240);\n\n\tfloat diagonal = clamp(1.0 - abs((uv.x * 1.15 + (1.0 - uv.y) * 0.9) - 0.95), 0.0, 1.0);\n\tdiagonal = smoothstep(0.0, 1.0, diagonal);\n\tfloat top_glow = pow(1.0 - uv.y, 1.8);\n\tfloat left_glow = pow(1.0 - uv.x, 2.3);\n\tvec2 center_delta = (uv - vec2(0.56, 0.45)) * vec2(1.05, 0.9);\n\tvec2 top_left_delta = (uv - vec2(0.18, 0.10)) * vec2(1.4, 0.9);\n\tfloat center_bloom = exp(-14.0 * dot(center_delta, center_delta));\n\tfloat top_left_bloom = exp(-18.0 * dot(top_left_delta, top_left_delta));\n\n\tvec3 col = base;\n\tcol = mix(col, slate, 0.28 * top_glow);\n\tcol += deep_blue * (0.42 * diagonal + 0.22 * top_left_bloom);\n\tcol += mid_blue * (0.22 * center_bloom + 0.12 * top_glow + 0.10 * left_glow);\n\n\tfloat vignette = smoothstep(0.95, 0.2, length((uv - vec2(0.5)) * vec2(1.35, 1.05)));\n\tcol *= (1.0 - 0.14 * vignette);\n\tCOLOR = vec4(col, 1.0);\n}\n"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ui_background_gradient"]
+shader = SubResource("Shader_ui_background_gradient")
+
 [node name="GameUI" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -30,6 +48,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_kofqh")
+
+[node name="BackgroundGradient" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+material = SubResource("ShaderMaterial_ui_background_gradient")
+mouse_filter = 2
+color = Color(1, 1, 1, 1)
 
 [node name="RoundDataContainer" type="Control" parent="."]
 layout_mode = 1
@@ -41,6 +70,7 @@ grow_vertical = 2
 theme = ExtResource("2_t5mpo")
 
 [node name="RoundRulesPanel" type="PanelContainer" parent="RoundDataContainer"]
+visible = false
 layout_mode = 1
 offset_left = 10.0
 offset_top = 10.0
@@ -143,6 +173,10 @@ text = "Meld Board"
 [node name="ScoreSheetButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 layout_mode = 2
 text = "Score Sheet"
+
+[node name="RoundRulesButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
+layout_mode = 2
+text = "Current Round Rules"
 
 [node name="DebugEndGameButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
 visible = false
@@ -317,50 +351,82 @@ alignment = 1
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
+anchor_top = 0.0
 anchor_right = 1.0
-offset_left = -78.0
-offset_bottom = 40.0
+offset_left = -232.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 216.0
 grow_horizontal = 0
+grow_vertical = 0
 theme = ExtResource("2_t5mpo")
-
-[node name="BackgroundContainer" type="ColorRect" parent="RoundDataContainer/MC"]
-layout_mode = 2
-theme = ExtResource("2_t5mpo")
-color = Color(0.264184, 0.701187, 0.914353, 0.305882)
 
 [node name="VBCRoundData" type="VBoxContainer" parent="RoundDataContainer/MC"]
 layout_mode = 2
-theme = ExtResource("2_t5mpo")
-
-[node name="RoundNumberContainer" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData"]
-layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
 theme = ExtResource("2_t5mpo")
+theme_override_constants/separation = 14
 
-[node name="RoundNumber" type="RichTextLabel" parent="RoundDataContainer/MC/VBCRoundData/RoundNumberContainer"]
+[node name="RoundNumberContainer" type="PanelContainer" parent="RoundDataContainer/MC/VBCRoundData"]
 layout_mode = 2
+custom_minimum_size = Vector2(220, 88)
+theme = ExtResource("2_t5mpo")
+theme_override_styles/panel = SubResource("StyleBoxFlat_status_card")
+
+[node name="RoundNumberMargin" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData/RoundNumberContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="RoundNumber" type="RichTextLabel" parent="RoundDataContainer/MC/VBCRoundData/RoundNumberContainer/RoundNumberMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme = ExtResource("2_t5mpo")
 bbcode_enabled = true
-text = "Round: 0"
-fit_content = true
+text = "[color=#A2AFBF][font_size=12][b]#  ROUND[/b][/font_size][/color]\n[font_size=28][b]0[/b][/font_size]"
+fit_content = false
 scroll_active = false
-autowrap_mode = 0
+autowrap_mode = 3
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="CurrentPlayerContainer" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData"]
+[node name="CurrentPlayerContainer" type="PanelContainer" parent="RoundDataContainer/MC/VBCRoundData"]
 layout_mode = 2
+custom_minimum_size = Vector2(220, 88)
+theme = ExtResource("2_t5mpo")
+theme_override_styles/panel = SubResource("StyleBoxFlat_status_card")
+
+[node name="CurrentPlayerMargin" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="CurrentPlayer" type="RichTextLabel" parent="RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer/CurrentPlayerMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
 theme = ExtResource("2_t5mpo")
-
-[node name="CurrentPlayer" type="RichTextLabel" parent="RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer"]
-layout_mode = 2
-theme = ExtResource("2_t5mpo")
 bbcode_enabled = true
-text = "Current Turn: Davey"
-fit_content = true
+text = "[color=#A2AFBF][font_size=12][b]CURRENT TURN[/b][/font_size][/color]\n[font_size=18][b]Player 1[/b][/font_size]"
+fit_content = false
 scroll_active = false
-autowrap_mode = 0
+autowrap_mode = 3
 horizontal_alignment = 1
 vertical_alignment = 1
 
