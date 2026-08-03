@@ -88,6 +88,8 @@ func send_change_scene(path: String) -> void:
 func _apply_scene_change_locally(path: String) -> void:
 	if path.strip_edges().is_empty():
 		return
+	if _is_headless_smoke_process():
+		return
 	if _is_dedicated_server_process():
 		return
 	if path == MAIN_MENU_SCENE_PATH:
@@ -104,6 +106,12 @@ func _is_dedicated_server_process() -> bool:
 		return true
 	var args: PackedStringArray = OS.get_cmdline_args()
 	return args.has("--server")
+
+func _is_headless_smoke_process() -> bool:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	if args.has("--headless-smoke"):
+		return true
+	return OS.get_cmdline_user_args().has("--headless-smoke")
 
 func _disconnect_local_network_session() -> void:
 	if multiplayer.multiplayer_peer != null:

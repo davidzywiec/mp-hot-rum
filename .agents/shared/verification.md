@@ -24,7 +24,11 @@ Use the narrowest verification that gives confidence for the touched area. If a 
 
 ## Headless Gameplay Smoke Checks
 
-These checks require a project-provided runner. Until the runner exists and passes, agents must report headless gameplay coverage as a gap.
+Run:
+
+```bash
+scripts/qa/headless_gameplay_smoke.sh
+```
 
 - Start a local dedicated/headless server.
 - Start the required local client peers or test harness.
