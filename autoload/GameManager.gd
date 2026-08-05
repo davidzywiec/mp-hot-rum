@@ -18,6 +18,7 @@ var claim_window_active: bool = false
 var claim_deadline_unix: int = 0
 var claim_opened_by_peer_id: int = -1
 var claim_window_id: int = 0
+var claim_eligible_peer_ids: Array = []
 var turn_pickup_completed: bool = false
 var turn_discard_completed: bool = false
 var player_put_down_status: Dictionary = {} # key: peer_id, value: bool
@@ -410,6 +411,7 @@ func clear_claim_window() -> void:
 	claim_window_active = false
 	claim_deadline_unix = 0
 	claim_opened_by_peer_id = -1
+	claim_eligible_peer_ids.clear()
 
 func mark_turn_pickup_completed() -> void:
 	if not _is_server_authority():
@@ -876,6 +878,9 @@ func apply_game_state(state: Dictionary) -> void:
 	claim_window_active = bool(state.get("claim_window_active", false))
 	claim_deadline_unix = int(state.get("claim_deadline_unix", 0))
 	claim_opened_by_peer_id = int(state.get("claim_opened_by_peer_id", -1))
+	claim_eligible_peer_ids.clear()
+	for raw_peer_id in state.get("claim_eligible_peer_ids", []):
+		claim_eligible_peer_ids.append(int(raw_peer_id))
 	turn_pickup_completed = bool(state.get("turn_pickup_completed", false))
 	turn_discard_completed = bool(state.get("turn_discard_completed", false))
 	player_put_down_status.clear()

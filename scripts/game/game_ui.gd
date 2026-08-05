@@ -803,8 +803,10 @@ func _update_action_buttons_state() -> void:
 	var selected_count: int = _selected_cards.size()
 
 	if pass_pile_button != null:
+		pass_pile_button.visible = _should_show_local_claim_window()
 		pass_pile_button.disabled = not _can_local_pass_claim_offer()
 	if claim_pile_button != null:
+		claim_pile_button.visible = _should_show_local_claim_window()
 		claim_pile_button.disabled = turn_discard_completed or not _can_local_claim_pile()
 	if put_down_button != null:
 		put_down_button.disabled = not (can_put_down and selected_count > 0)
@@ -877,16 +879,11 @@ func _is_local_players_turn() -> bool:
 func _can_local_claim_pile() -> bool:
 	if GameManager.game_over:
 		return false
-	var local_peer_id: int = multiplayer.get_unique_id()
-	if local_peer_id <= 0:
-		return false
 	if _local_claim_offer_passed:
 		return false
 	if not GameManager.claim_window_active:
 		return false
-	if GameManager.claim_opened_by_peer_id == local_peer_id:
-		return false
-	return not _is_local_players_turn()
+	return _is_local_peer_eligible_for_claim_offer()
 
 func _can_local_pass_claim_offer() -> bool:
 	if GameManager.game_over:
@@ -895,12 +892,20 @@ func _can_local_pass_claim_offer() -> bool:
 		return false
 	if not GameManager.claim_window_active:
 		return false
+	return _is_local_peer_eligible_for_claim_offer()
+
+func _is_local_peer_eligible_for_claim_offer() -> bool:
 	var local_peer_id: int = multiplayer.get_unique_id()
 	if local_peer_id <= 0:
 		return false
 	if GameManager.claim_opened_by_peer_id == local_peer_id:
 		return false
+	if not GameManager.claim_eligible_peer_ids.has(local_peer_id):
+		return false
 	return not _is_local_players_turn()
+
+func _should_show_local_claim_window() -> bool:
+	return _can_local_claim_pile() or _can_local_pass_claim_offer()
 
 func _should_show_turn_pickup_overlay() -> bool:
 	if GameManager.game_over:
@@ -1408,6 +1413,9 @@ func _update_claim_status_label() -> void:
 			claim_status_label.text = "Discard complete. You can end your turn."
 		else:
 			claim_status_label.text = ""
+		return
+	if not _should_show_local_claim_window():
+		claim_status_label.text = ""
 		return
 	if _local_claim_offer_passed:
 		claim_status_label.text = "You passed on this pile offer."

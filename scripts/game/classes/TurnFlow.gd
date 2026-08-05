@@ -49,6 +49,9 @@ func reset_claim_tracking() -> void:
 	_reset_claim_pass_tracking(-1)
 	last_discard_peer_id = -1
 
+func eligible_claim_peer_ids() -> Array:
+	return _eligible_claim_peer_ids()
+
 func _draw_from_deck(peer_id: int, move: Dictionary) -> Dictionary:
 	var validation: Dictionary = _validate_current_turn_peer(peer_id)
 	if not bool(validation.get("ok", false)):

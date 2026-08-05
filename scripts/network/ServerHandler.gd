@@ -442,6 +442,8 @@ func _broadcast_game_state() -> void:
 				order_ids.append(p.peer_id)
 			elif typeof(p) == TYPE_DICTIONARY and p.has("peer_id"):
 				order_ids.append(p["peer_id"])
+	var claim_eligible_peer_ids: Array = turn_flow.eligible_claim_peer_ids()
+	game_manager.claim_eligible_peer_ids = claim_eligible_peer_ids.duplicate()
 	var snapshot: Dictionary = {
 		"players": state_players,
 		"player_order_ids": order_ids,
@@ -453,6 +455,7 @@ func _broadcast_game_state() -> void:
 		"claim_window_active": game_manager.claim_window_active,
 		"claim_deadline_unix": game_manager.claim_deadline_unix,
 		"claim_opened_by_peer_id": game_manager.claim_opened_by_peer_id,
+		"claim_eligible_peer_ids": claim_eligible_peer_ids,
 		"turn_pickup_completed": game_manager.turn_pickup_completed,
 		"turn_discard_completed": game_manager.turn_discard_completed,
 		"put_down_player_ids": game_manager.get_put_down_player_ids(),
