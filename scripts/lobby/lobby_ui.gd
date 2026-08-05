@@ -25,6 +25,7 @@ func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
 	_apply_card_button_theme_to_tree(self)
 	set_ui_actions(false)
+	_update_ready_button_label()
 	ready_btn.pressed.connect(set_ready_flag)
 	start_btn.pressed.connect(start_game)
 	SignalManager.host_changed.connect(_on_host_changed)
@@ -45,6 +46,7 @@ func _ready() -> void:
 	
 func set_ready_flag() -> void:
 	ready_status = !ready_status
+	_update_ready_button_label()
 	SignalManager.player_ready.emit(ready_status)
 	if Network_Manager.handler is ClientHandler:
 		var peer_id: int = multiplayer.get_unique_id()
@@ -86,6 +88,8 @@ func update_lobby_ui(players_data: Array) -> void:
 		card.set_username(player_info.name)
 		card.set_ready(player_info.ready)
 		if player_info.peer_id == my_id:
+			ready_status = player_info.ready
+			_update_ready_button_label()
 			set_ready_connection(card)
 		if i == 0 and player_info.peer_id == multiplayer.get_unique_id():
 			all_ready = true
@@ -163,3 +167,8 @@ func _style_card_button(button: Button) -> void:
 	if button == null:
 		return
 	MDTheme.apply_button(button, 13)
+
+func _update_ready_button_label() -> void:
+	if ready_btn == null:
+		return
+	ready_btn.text = "Not Ready" if ready_status else "Ready"
