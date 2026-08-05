@@ -4,5 +4,5 @@
 
 [resource]
 script = ExtResource("1_player1_override")
-enabled = true
+enabled = false
 player_one_cards = PackedStringArray("3d", "4d", "5d", "6d", "2h", "3h", "4h", "5h", "6h", "2s", "3s", "4s")
