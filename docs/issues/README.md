@@ -10,9 +10,9 @@ Copy `docs/issues/templates/agent-task.md` into `docs/issues/drafts/` and fill i
 
 ```bash
 gh issue create \
-  --title "Issue title" \
+  --title "Pick Feature Bug" \
   --label ready-for-agent \
-  --body-file docs/issues/drafts/my-issue.md
+  --body-file docs/issues/drafts/Pick Feature Bug.md
 ```
 
 Use `ready-for-agent` only when the issue is clear enough for an agent to implement without stopping for product decisions. Use `needs-triage` or `needs-info` for work that still needs clarification.

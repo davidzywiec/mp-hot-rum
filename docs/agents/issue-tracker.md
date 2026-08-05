@@ -2,6 +2,16 @@
 
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
+## Issue branch workflow
+
+All GitHub issue implementation work must happen on an issue-scoped branch, then merge back into `master` through a pull request after review and verification. Do not implement issue work directly on `master`.
+
+- Start from current `master`: `git switch master`, update it, then create a branch for the issue.
+- Name branches with the issue number and a short slug, such as `issue/3-pick-feature-bug` or `fix/3-pick-feature-bug`.
+- Keep each issue branch scoped to that issue. If unrelated work is already present, separate it before committing or opening the PR.
+- Reference the issue in commits, PR titles, or PR bodies so GitHub can track the work back to the issue.
+- Merge only after the issue acceptance criteria have been verified and review feedback is resolved.
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.

@@ -9,6 +9,7 @@ The `grilling` skill and composite skills that route into it may only be used af
 ### Issue tracker
 
 Issues and PRDs for this repo live in GitHub Issues. See `docs/agents/issue-tracker.md`.
+GitHub issue implementation work must use an issue-scoped branch and merge back into `master` through a pull request.
 
 ### Triage labels
 
