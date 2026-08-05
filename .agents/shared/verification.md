@@ -30,6 +30,10 @@ Run:
 scripts/qa/headless_gameplay_smoke.sh
 ```
 
+This is a narrow local Godot headless gameplay protocol smoke. It does not verify Docker packaging, exported server binaries, or the full UI/lobby flow.
+
+A full server lifecycle acceptance check should be a separate target from this smoke runner. That future target should cover server responses from lobby registration/readiness/countdown through gameplay actions, round or game completion, and return/play-again behavior.
+
 - Start a local dedicated/headless server.
 - Start the required local client peers or test harness.
 - Connect clients to the server.

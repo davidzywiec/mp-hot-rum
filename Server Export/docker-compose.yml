@@ -1,7 +1,6 @@
-version: "3.9"
-
 services:
   hotrum-server:
+    platform: linux/amd64
     build: .
     image: hotrum-server
     ports:

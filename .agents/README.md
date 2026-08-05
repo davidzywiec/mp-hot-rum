@@ -22,6 +22,8 @@ Every implementation agent should read these first:
 
 ## Default Workflow
 
+Repository writes and commits follow [ADR-0001](../docs/adr/0001-agent-skill-autonomy-contract.md): agents may inspect and propose autonomously, but docs, issues, code edits, and commits require an explicit confirmation point in the skill flow.
+
 1. Choose one primary implementation agent based on the requested change.
 2. Read the primary agent file and the shared references.
 3. Keep edits inside the agent's ownership area unless the task genuinely crosses boundaries.
