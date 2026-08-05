@@ -31,8 +31,10 @@ var round_rules_label: Label = null
 var turn_pickup_overlay: ColorRect = null
 var turn_pickup_title_label: Label = null
 var turn_pickup_status_label: Label = null
+var turn_pickup_minimize_button: Button = null
 var turn_pickup_deck_button: Button = null
 var turn_pickup_discard_button: Button = null
+var turn_pickup_restore_button: Button = null
 var game_over_overlay: ColorRect = null
 var game_over_title_label: Label = null
 var game_over_status_label: Label = null
@@ -66,10 +68,12 @@ var _round_rules_popup: AcceptDialog = null
 var _round_rules_popup_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
 var _play_again_vote_peer_ids: Array[int] = []
+var _turn_pickup_overlay_minimized: bool = false
 var _button_style_normal: StyleBoxFlat = null
 var _button_style_hover: StyleBoxFlat = null
 var _button_style_pressed: StyleBoxFlat = null
 var _button_style_disabled: StyleBoxFlat = null
+var _button_style_restore: StyleBoxFlat = null
 
 func _ready() -> void:
 	_resolve_hand_nodes()
@@ -93,10 +97,14 @@ func _ready() -> void:
 		discard_selected_button.pressed.connect(_on_discard_selected_pressed)
 	if clear_selection_button != null:
 		clear_selection_button.pressed.connect(_on_clear_selection_pressed)
+	if turn_pickup_minimize_button != null:
+		turn_pickup_minimize_button.pressed.connect(_on_turn_pickup_minimize_pressed)
 	if turn_pickup_deck_button != null:
 		turn_pickup_deck_button.pressed.connect(_on_turn_pickup_deck_pressed)
 	if turn_pickup_discard_button != null:
 		turn_pickup_discard_button.pressed.connect(_on_turn_pickup_discard_pressed)
+	if turn_pickup_restore_button != null:
+		turn_pickup_restore_button.pressed.connect(_on_turn_pickup_restore_pressed)
 	if play_again_game_button != null:
 		play_again_game_button.pressed.connect(_on_play_again_game_pressed)
 	if leave_game_button != null:
@@ -412,8 +420,10 @@ func _resolve_hand_nodes() -> void:
 	turn_pickup_overlay = get_node_or_null("RoundDataContainer/TurnPickupOverlay") as ColorRect
 	turn_pickup_title_label = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/TitleLabel") as Label
 	turn_pickup_status_label = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/StatusLabel") as Label
+	turn_pickup_minimize_button = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/MinimizeButton") as Button
 	turn_pickup_deck_button = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/Buttons/PickupDeckButton") as Button
 	turn_pickup_discard_button = get_node_or_null("RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/Buttons/PickupDiscardButton") as Button
+	turn_pickup_restore_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/TurnPickupRestoreButton") as Button
 	game_over_overlay = get_node_or_null("RoundDataContainer/GameOverOverlay") as ColorRect
 	game_over_title_label = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/TitleLabel") as Label
 	game_over_status_label = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/StatusLabel") as Label
@@ -903,11 +913,15 @@ func _should_show_turn_pickup_overlay() -> bool:
 	return _is_local_players_turn()
 
 func _update_turn_pickup_overlay() -> void:
-	if turn_pickup_overlay == null:
-		return
 	var show_overlay: bool = _should_show_turn_pickup_overlay()
-	turn_pickup_overlay.visible = show_overlay
 	if not show_overlay:
+		_turn_pickup_overlay_minimized = false
+	if turn_pickup_overlay != null:
+		turn_pickup_overlay.visible = show_overlay and not _turn_pickup_overlay_minimized
+	if turn_pickup_restore_button != null:
+		turn_pickup_restore_button.visible = show_overlay and _turn_pickup_overlay_minimized
+		turn_pickup_restore_button.disabled = not show_overlay
+	if turn_pickup_overlay == null or not show_overlay:
 		return
 	if turn_pickup_title_label != null:
 		turn_pickup_title_label.text = "Your Turn"
@@ -922,14 +936,32 @@ func _update_turn_pickup_overlay() -> void:
 	if turn_pickup_discard_button != null:
 		turn_pickup_discard_button.disabled = not has_pile_card
 
+func _on_turn_pickup_minimize_pressed() -> void:
+	if not _should_show_turn_pickup_overlay():
+		_update_turn_pickup_overlay()
+		return
+	_turn_pickup_overlay_minimized = true
+	_update_turn_pickup_overlay()
+
+func _on_turn_pickup_restore_pressed() -> void:
+	if not _should_show_turn_pickup_overlay():
+		_update_turn_pickup_overlay()
+		return
+	_turn_pickup_overlay_minimized = false
+	_update_turn_pickup_overlay()
+
 func _on_turn_pickup_deck_pressed() -> void:
 	if not _should_show_turn_pickup_overlay():
 		_update_turn_pickup_overlay()
 		return
+	_turn_pickup_overlay_minimized = false
 	if turn_pickup_deck_button != null:
 		turn_pickup_deck_button.disabled = true
 	if turn_pickup_discard_button != null:
 		turn_pickup_discard_button.disabled = true
+	if turn_pickup_restore_button != null:
+		turn_pickup_restore_button.visible = false
+		turn_pickup_restore_button.disabled = true
 	_on_draw_deck_pressed()
 	call_deferred("_update_turn_pickup_overlay")
 
@@ -937,10 +969,14 @@ func _on_turn_pickup_discard_pressed() -> void:
 	if not _should_show_turn_pickup_overlay():
 		_update_turn_pickup_overlay()
 		return
+	_turn_pickup_overlay_minimized = false
 	if turn_pickup_deck_button != null:
 		turn_pickup_deck_button.disabled = true
 	if turn_pickup_discard_button != null:
 		turn_pickup_discard_button.disabled = true
+	if turn_pickup_restore_button != null:
+		turn_pickup_restore_button.visible = false
+		turn_pickup_restore_button.disabled = true
 	_on_take_pile_pressed()
 	call_deferred("_update_turn_pickup_overlay")
 
@@ -1325,6 +1361,7 @@ func _on_add_selected_to_meld_pressed(meld_id: int) -> void:
 
 func _process(_delta: float) -> void:
 	_update_claim_status_label()
+	_update_turn_pickup_restore_indicator()
 
 func _update_claim_status_label() -> void:
 	if claim_status_label == null:
@@ -1369,6 +1406,39 @@ func _update_claim_status_label() -> void:
 	var remaining: int = maxi(0, GameManager.claim_deadline_unix - now_unix)
 	var card_text: String = _card_to_short_text(GameManager.get_discard_top_card())
 	claim_status_label.text = "Claim window: %ds for %s" % [remaining, card_text]
+
+func _update_turn_pickup_restore_indicator() -> void:
+	if turn_pickup_restore_button == null:
+		return
+	if not turn_pickup_restore_button.visible:
+		turn_pickup_restore_button.modulate = Color.WHITE
+		if _button_style_normal != null:
+			turn_pickup_restore_button.add_theme_stylebox_override("normal", _button_style_normal)
+			turn_pickup_restore_button.add_theme_stylebox_override("hover", _button_style_hover)
+			turn_pickup_restore_button.add_theme_stylebox_override("focus", _button_style_hover)
+		return
+	var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 180.0)
+	turn_pickup_restore_button.modulate = Color(1.0, 0.90 + (0.10 * pulse), 0.55 + (0.35 * pulse), 1.0)
+	_ensure_turn_pickup_restore_style()
+	_button_style_restore.border_color = Color(1.0, 0.78 + (0.20 * pulse), 0.25 + (0.35 * pulse), 1.0)
+	_button_style_restore.shadow_color = Color(1.0, 0.68, 0.18, 0.35 + (0.35 * pulse))
+	_button_style_restore.shadow_size = 6 + int(5.0 * pulse)
+	turn_pickup_restore_button.add_theme_stylebox_override("normal", _button_style_restore)
+	turn_pickup_restore_button.add_theme_stylebox_override("hover", _button_style_restore)
+	turn_pickup_restore_button.add_theme_stylebox_override("focus", _button_style_restore)
+
+func _ensure_turn_pickup_restore_style() -> void:
+	if _button_style_restore != null:
+		return
+	_ensure_card_button_styles()
+	_button_style_restore = _make_button_style(
+		Color(0.16, 0.15, 0.09, 0.98),
+		Color(1.0, 0.82, 0.30, 1.0)
+	)
+	_button_style_restore.border_width_left = 2
+	_button_style_restore.border_width_top = 2
+	_button_style_restore.border_width_right = 2
+	_button_style_restore.border_width_bottom = 2
 
 func _apply_card_button_theme_to_tree(root: Node) -> void:
 	if root == null:

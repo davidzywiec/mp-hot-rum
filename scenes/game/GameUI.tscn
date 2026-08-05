@@ -195,6 +195,11 @@ text = "Discard Sel"
 layout_mode = 2
 text = "Clear Sel"
 
+[node name="TurnPickupRestoreButton" type="Button" parent="RoundDataContainer/BottomControlsBar/ActionBar"]
+visible = false
+layout_mode = 2
+text = "Resume Pickup"
+
 [node name="EndTurnButton" type="Button" parent="RoundDataContainer/BottomControlsBar"]
 layout_mode = 2
 text = "End Turn"
@@ -246,6 +251,10 @@ layout_mode = 2
 text = "Pick up from deck or discard pile."
 horizontal_alignment = 1
 autowrap_mode = 3
+
+[node name="MinimizeButton" type="Button" parent="RoundDataContainer/TurnPickupOverlay/Center/Panel/VB"]
+layout_mode = 2
+text = "Minimize"
 
 [node name="Buttons" type="HBoxContainer" parent="RoundDataContainer/TurnPickupOverlay/Center/Panel/VB"]
 layout_mode = 2
