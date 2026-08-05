@@ -13,6 +13,7 @@ const TURN_DEBUG: bool = true
 const CLAIM_WINDOW_SECONDS: int = 30
 const PLAY_AGAIN_RESTART_DELAY_SECONDS: float = 0.35
 const RETURN_TO_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
+const TURN_FLOW_SCRIPT: GDScript = preload("res://scripts/game/classes/TurnFlow.gd")
 
 # Timestamped logging for server output.
 func _ts() -> String:
@@ -32,8 +33,7 @@ func _log_err(msg: String) -> void:
 var players: Dictionary = {} # key: player_name, value: Player
 var ready_players: Dictionary = {}
 var game_manager: Node = null
-var claim_passed_peer_ids: Dictionary = {} # key: peer_id, value: true
-var claim_pass_window_id: int = -1
+var turn_flow: RefCounted = null
 var play_again_votes: Dictionary = {} # key: peer_id, value: true
 var play_again_restart_pending: bool = false
 
@@ -64,11 +64,20 @@ func start():
 
 func _bind_game_manager() -> void:
 	if game_manager != null:
+		_ensure_turn_flow()
 		return
 	if not get_node_or_null("/root/GameManager"):
 		_log_err("GameManager autoload not found; cannot bind server game state.")
 		return
 	game_manager = get_node("/root/GameManager")
+	_ensure_turn_flow()
+
+func _ensure_turn_flow() -> RefCounted:
+	if turn_flow == null:
+		turn_flow = TURN_FLOW_SCRIPT.new()
+	if game_manager != null:
+		turn_flow.configure(game_manager, players)
+	return turn_flow
 
 # Called when a new player connects to the server
 func _on_peer_connected(peer_id: int) -> void:
@@ -146,92 +155,37 @@ func register_debug_end_game(peer_id: int) -> void:
 	_broadcast_game_state()
 
 func register_end_turn(peer_id: int) -> void:
-	if game_manager == null:
-		_bind_game_manager()
-	if game_manager == null:
-		_log_err("Ignoring end turn from %s: GameManager unavailable." % str(peer_id))
+	if not _ensure_game_manager_bound():
 		return
-	if game_manager.game_over:
-		_log("Ignoring end turn from %s: game is already over." % str(peer_id))
-		return
-	if not players.has(peer_id):
-		_log_err("Ignoring end turn from unknown peer %s." % str(peer_id))
-		return
-
-	var current_turn_peer_id: int = game_manager.get_current_player_peer_id()
 	if TURN_DEBUG:
 		_log("[TURN_DEBUG][SERVER][register_end_turn] sender=%s current_turn_peer=%s current_idx=%d order_size=%d" % [
 			str(peer_id),
-			str(current_turn_peer_id),
+			str(game_manager.get_current_player_peer_id()),
 			int(game_manager.current_player_index),
 			int(game_manager.player_order.size())
 		])
-	if current_turn_peer_id == -1:
-		_log_err("Ignoring end turn from %s: no active current player." % str(peer_id))
-		return
-	if current_turn_peer_id != peer_id:
-		_log("Ignoring end turn from peer %s: current turn belongs to %s." % [
-			str(peer_id), str(current_turn_peer_id)
-		])
-		return
-	if not game_manager.turn_discard_completed:
-		_log("Ignoring end turn from peer %s: they must discard before ending their turn." % str(peer_id))
-		return
-
-	if not game_manager.has_player_put_down(peer_id):
-		if game_manager.get_put_down_buffer_size_for_peer(peer_id) > 0:
-			game_manager.reset_put_down_progress_for_peer(peer_id)
-			_send_private_put_down_buffer_to_peer(peer_id)
-			_log("Cleared incomplete put-down slots for peer %s at end turn." % str(peer_id))
-
-	# TODO: Gate end-turn with full rules validation (melded sets/runs and go-out/end-game checks).
-	game_manager.advance_to_next_player()
-	_log("Turn ended by peer %s. Next player is %s." % [
-		str(peer_id), game_manager.get_player_name(game_manager.current_player_index)
-	])
-	Game_State_Manager.send_round_update(
-		game_manager.round_number,
-		game_manager.get_player_name(game_manager.current_player_index)
-	)
-	_broadcast_game_state()
+	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "end_turn"
+	})
+	_apply_turn_flow_result(result)
 
 func register_draw_from_deck(peer_id: int) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not _validate_turn_action_peer(peer_id):
-		return
-	if game_manager.turn_pickup_completed:
-		_log("Ignoring draw request from %s: turn pickup already completed." % str(peer_id))
-		return
-	if game_manager.claim_window_active:
-		_log("Ignoring draw request from %s while claim window is active." % str(peer_id))
-		return
-	var drawn_card: Card = game_manager.draw_card_from_deck_for_peer(peer_id)
-	if drawn_card == null:
-		_log_err("Draw from deck failed for peer %s (deck empty or unavailable)." % str(peer_id))
-		return
-	game_manager.mark_turn_pickup_completed()
-	_send_private_hand_to_peer(peer_id)
-	var claim_started: bool = _start_claim_window(peer_id)
-	if claim_started:
-		_log("Peer %s drew from deck and auto-opened a %d second claim window." % [
-			str(peer_id), CLAIM_WINDOW_SECONDS
-		])
-	_broadcast_game_state()
+	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "draw_from_deck",
+		"claim_window_seconds": CLAIM_WINDOW_SECONDS
+	})
+	_apply_turn_flow_result(result)
 
 func register_put_down(peer_id: int, cards_data: Array) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not _validate_turn_action_peer(peer_id):
-		return
-	if game_manager.claim_window_active:
-		_reject_put_down(peer_id, "Cannot put down while pile claim window is active.")
-		return
-	if not game_manager.turn_pickup_completed:
-		_reject_put_down(peer_id, "Pick up a card before putting down.")
-		return
-	if game_manager.turn_discard_completed:
-		_reject_put_down(peer_id, "Discard already completed. End your turn.")
+	var gate_result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "put_down_gate"
+	})
+	if not bool(gate_result.get("ok", false)):
+		_reject_put_down(peer_id, str(gate_result.get("reason", "Cannot put down right now.")))
 		return
 	if game_manager.has_player_put_down(peer_id):
 		_reject_put_down(peer_id, "You already completed put down for this round.")
@@ -320,16 +274,11 @@ func register_put_down(peer_id: int, cards_data: Array) -> void:
 func register_add_to_meld(peer_id: int, meld_id: int, card_data: Dictionary) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not _validate_turn_action_peer(peer_id):
-		return
-	if game_manager.claim_window_active:
-		_reject_put_down(peer_id, "Cannot add to melds during the claim window.")
-		return
-	if not game_manager.turn_pickup_completed:
-		_reject_put_down(peer_id, "Pick up a card before adding to melds.")
-		return
-	if game_manager.turn_discard_completed:
-		_reject_put_down(peer_id, "Discard already completed. End your turn.")
+	var gate_result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "add_to_meld_gate"
+	})
+	if not bool(gate_result.get("ok", false)):
+		_reject_put_down(peer_id, str(gate_result.get("reason", "Cannot add to melds right now.")))
 		return
 	if not game_manager.has_player_put_down(peer_id):
 		_reject_put_down(peer_id, "You must go down before adding to melds.")
@@ -388,135 +337,35 @@ func register_add_to_meld(peer_id: int, meld_id: int, card_data: Dictionary) -> 
 func register_discard_card(peer_id: int, card_data: Dictionary) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not _validate_turn_action_peer(peer_id):
-		return
-	if game_manager.claim_window_active:
-		_log("Ignoring discard request from %s while claim window is active." % str(peer_id))
-		return
-	if not game_manager.turn_pickup_completed:
-		_log("Ignoring discard request from %s: player must pick up a card first." % str(peer_id))
-		return
-	if game_manager.turn_discard_completed:
-		_log("Ignoring discard request from %s: discard already completed this turn." % str(peer_id))
-		return
-	if card_data.is_empty():
-		_log_err("Ignoring discard request from %s: invalid card payload." % str(peer_id))
-		return
-
-	var requirement: RoundRequirement = game_manager.get_current_round_requirement()
-	var all_cards_required: bool = requirement != null and bool(requirement.all_cards)
-	var hand_size_before_discard: int = game_manager.get_hand_size_for_peer(peer_id)
-	var is_final_card_discard: bool = hand_size_before_discard <= 1
-	if all_cards_required and is_final_card_discard and not game_manager.has_player_put_down(peer_id):
-		_reject_put_down(peer_id, "This round requires all cards. Go down with no cards left to win the round.")
-		return
-
-	if not game_manager.has_player_put_down(peer_id):
-		if game_manager.get_put_down_buffer_size_for_peer(peer_id) > 0:
-			game_manager.reset_put_down_progress_for_peer(peer_id)
-			_send_private_put_down_buffer_to_peer(peer_id)
-			_log("Peer %s discarded before going down. Cleared staged meld slots." % str(peer_id))
-
-	var discarded_card: Card = game_manager.discard_card_from_peer(peer_id, card_data)
-	if discarded_card == null:
-		_log_err("Discard request from %s failed: card not found in hand." % str(peer_id))
-		return
-
-	game_manager.mark_turn_discard_completed()
-	_send_private_hand_to_peer(peer_id)
-
-	var remaining_cards: int = game_manager.get_hand_size_for_peer(peer_id)
-	if remaining_cards <= 0:
-		_handle_round_finished(peer_id, "Peer %s discarded their final card %s. Round is over." % [str(peer_id), str(discarded_card)])
-		return
-
-	_broadcast_game_state()
+	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "discard_card",
+		"card_data": card_data
+	})
+	_apply_turn_flow_result(result)
 
 func register_take_from_pile(peer_id: int) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not _validate_turn_action_peer(peer_id):
-		return
-	if game_manager.turn_pickup_completed:
-		_log("Ignoring take-pile request from %s: turn pickup already completed." % str(peer_id))
-		return
-	if game_manager.claim_window_active:
-		_log("Ignoring take-pile request from %s while claim window is active." % str(peer_id))
-		return
-	var taken_card: Card = game_manager.take_discard_top_for_peer(peer_id)
-	if taken_card == null:
-		_log_err("Take from pile failed for peer %s (pile empty)." % str(peer_id))
-		return
-	game_manager.mark_turn_pickup_completed()
-	_send_private_hand_to_peer(peer_id)
-	_broadcast_game_state()
+	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "take_from_pile"
+	})
+	_apply_turn_flow_result(result)
 
 func register_pass_pile(peer_id: int) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not players.has(peer_id):
-		_log_err("Ignoring pass request from unknown peer %s." % str(peer_id))
-		return
-	if not game_manager.claim_window_active:
-		_log("Ignoring pass-pile request from %s: no active claim window." % str(peer_id))
-		return
-	if game_manager.claim_opened_by_peer_id == peer_id:
-		_log("Ignoring pass-pile request from %s: opener does not pass their own offer." % str(peer_id))
-		return
-	var current_turn_peer_id: int = game_manager.get_current_player_peer_id()
-	if current_turn_peer_id == peer_id:
-		_log("Ignoring pass-pile request from %s: current turn player is not part of claim passes." % str(peer_id))
-		return
-	if claim_pass_window_id != game_manager.claim_window_id:
-		_reset_claim_pass_tracking(game_manager.claim_window_id)
-	if claim_passed_peer_ids.has(peer_id):
-		_log("Ignoring pass-pile request from %s: already passed this claim window." % str(peer_id))
-		return
-	claim_passed_peer_ids[peer_id] = true
-	_log("Peer %s passed on the pile offer." % str(peer_id))
-	if _all_eligible_claim_players_passed():
-		_log("All eligible players passed. Closing claim window early.")
-		game_manager.clear_claim_window()
-		_reset_claim_pass_tracking(-1)
-	_broadcast_game_state()
+	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "pass_claim"
+	})
+	_apply_turn_flow_result(result)
 
 func register_claim_pile(peer_id: int) -> void:
 	if not _ensure_game_manager_bound():
 		return
-	if not players.has(peer_id):
-		_log_err("Ignoring claim request from unknown peer %s." % str(peer_id))
-		return
-	if not game_manager.claim_window_active:
-		_log("Ignoring claim request from %s: no active claim window." % str(peer_id))
-		return
-	if game_manager.claim_opened_by_peer_id == peer_id:
-		_log("Ignoring claim request from %s: opener cannot claim their own passed pile card." % str(peer_id))
-		return
-	var now_unix: int = int(Time.get_unix_time_from_system())
-	if game_manager.claim_deadline_unix > 0 and now_unix > game_manager.claim_deadline_unix:
-		_finalize_claim_window_if_open(game_manager.claim_window_id)
-		return
-
-	var claimed_card: Card = game_manager.take_discard_top_for_peer(peer_id)
-	if claimed_card == null:
-		_log_err("Claim request from %s failed: discard pile empty." % str(peer_id))
-		_finalize_claim_window_if_open(game_manager.claim_window_id)
-		return
-
-	var extra_card: Card = game_manager.draw_card_from_deck_for_peer(peer_id)
-	game_manager.clear_claim_window()
-	_reset_claim_pass_tracking(-1)
-	_send_private_hand_to_peer(peer_id)
-	Game_State_Manager.send_pile_claimed_notification(peer_id, claimed_card.to_dict(), extra_card != null)
-	var extra_draw_text: String = "did not draw"
-	if extra_card != null:
-		extra_draw_text = "drew"
-	_log("Peer %s claimed pile card %s and %s an extra deck card." % [
-		str(peer_id),
-		str(claimed_card),
-		extra_draw_text
-	])
-	_broadcast_game_state()
+	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
+		"type": "claim_pile"
+	})
+	_apply_turn_flow_result(result)
 
 # Called when a player disconnects
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -669,6 +518,8 @@ func start_game() -> void:
 	game_manager.load_players(players)
 	_log("Server starting game with default ruleset.")
 	game_manager.start_game()
+	if turn_flow != null:
+		turn_flow.reset_claim_tracking()
 	_send_private_hands()
 	Game_State_Manager.send_round_update(game_manager.round_number, game_manager.get_player_name(game_manager.current_player_index))
 	_broadcast_game_state()
@@ -704,6 +555,8 @@ func _handle_round_finished(finishing_peer_id: int, finish_message: String) -> v
 		return
 	_log(finish_message)
 	var completion: Dictionary = game_manager.complete_current_round(finishing_peer_id)
+	if turn_flow != null:
+		turn_flow.reset_claim_tracking()
 	var completed_round: int = int(completion.get("completed_round", game_manager.round_number))
 	var max_rounds: int = int(completion.get("max_rounds", game_manager.get_max_rounds()))
 	var round_score: Dictionary = completion.get("round_score", {})
@@ -797,7 +650,8 @@ func _end_game_session(reason: String) -> void:
 	play_again_restart_pending = false
 	play_again_votes.clear()
 	ready_players.clear()
-	_reset_claim_pass_tracking(-1)
+	if turn_flow != null:
+		turn_flow.reset_claim_tracking()
 	if game_manager != null:
 		game_manager.end_game_session()
 
@@ -885,86 +739,63 @@ func _ensure_game_manager_bound() -> bool:
 func _debug_ui_enabled() -> bool:
 	return bool(ProjectSettings.get_setting(DEBUG_UI_SETTING_PATH, false))
 
-func _validate_turn_action_peer(peer_id: int) -> bool:
-	if not players.has(peer_id):
-		_log_err("Ignoring request from unknown peer %s." % str(peer_id))
-		return false
-	if game_manager.game_over:
-		_log("Ignoring request from %s: game is already over." % str(peer_id))
-		return false
-	var current_turn_peer_id: int = game_manager.get_current_player_peer_id()
-	if current_turn_peer_id == -1:
-		_log_err("Ignoring request from %s: no active current player." % str(peer_id))
-		return false
-	if current_turn_peer_id != peer_id:
-		_log("Ignoring request from %s: current turn belongs to %s." % [
-			str(peer_id), str(current_turn_peer_id)
-		])
-		return false
-	return true
+func _apply_turn_flow_result(result: Dictionary) -> bool:
+	for raw_message in result.get("log_messages", []):
+		_log(str(raw_message))
 
-func _finalize_claim_window_if_open(expected_claim_id: int) -> void:
-	if game_manager == null:
-		return
-	if not game_manager.claim_window_active:
-		return
-	if game_manager.claim_window_id != expected_claim_id:
-		return
-	_log("Claim window timed out with no winner.")
-	game_manager.clear_claim_window()
-	_reset_claim_pass_tracking(-1)
-	_broadcast_game_state()
+	if not bool(result.get("ok", false)):
+		var reason: String = str(result.get("reason", "Turn Flow move rejected."))
+		var put_down_error_peer_id: int = int(result.get("put_down_error_peer_id", -1))
+		if put_down_error_peer_id > 0:
+			_reject_put_down(put_down_error_peer_id, reason)
+		else:
+			_log(reason)
+		return false
 
-func _start_claim_window(opened_by_peer_id: int) -> bool:
-	if game_manager == null:
-		return false
-	if game_manager.claim_window_active:
-		return false
-	if game_manager.get_discard_top_card() == null:
-		return false
-	var claim_id: int = game_manager.open_claim_window(opened_by_peer_id, CLAIM_WINDOW_SECONDS)
-	if claim_id == -1:
-		return false
-	_reset_claim_pass_tracking(claim_id)
-	if _all_eligible_claim_players_passed():
-		game_manager.clear_claim_window()
-		_reset_claim_pass_tracking(-1)
-		return false
-	var claim_timer: SceneTreeTimer = get_tree().create_timer(float(CLAIM_WINDOW_SECONDS), false)
-	claim_timer.timeout.connect(func ():
-		_finalize_claim_window_if_open(claim_id)
-	)
-	return true
-
-func _eligible_claim_peer_ids() -> Array:
-	var eligible: Array = []
-	if game_manager == null:
-		return eligible
-	var opener_peer_id: int = int(game_manager.claim_opened_by_peer_id)
-	var current_turn_peer_id: int = game_manager.get_current_player_peer_id()
-	for raw_peer_id in players.keys():
-		var peer_id: int = int(raw_peer_id)
-		if peer_id == opener_peer_id:
-			continue
-		if peer_id == current_turn_peer_id:
-			continue
-		eligible.append(peer_id)
-	eligible.sort()
-	return eligible
-
-func _all_eligible_claim_players_passed() -> bool:
-	var eligible_peer_ids: Array = _eligible_claim_peer_ids()
-	if eligible_peer_ids.is_empty():
+	var round_finished: Dictionary = result.get("round_finished", {})
+	if not round_finished.is_empty():
+		_handle_round_finished(
+			int(round_finished.get("peer_id", -1)),
+			str(round_finished.get("message", "Round is over."))
+		)
 		return true
-	for raw_peer_id in eligible_peer_ids:
-		var peer_id: int = int(raw_peer_id)
-		if not claim_passed_peer_ids.has(peer_id):
-			return false
-	return true
 
-func _reset_claim_pass_tracking(window_id: int) -> void:
-	claim_pass_window_id = window_id
-	claim_passed_peer_ids.clear()
+	for raw_peer_id in result.get("private_hand_peer_ids", []):
+		_send_private_hand_to_peer(int(raw_peer_id))
+	for raw_peer_id in result.get("private_put_down_peer_ids", []):
+		_send_private_put_down_buffer_to_peer(int(raw_peer_id))
+
+	var claim_notification: Dictionary = result.get("claim_notification", {})
+	if not claim_notification.is_empty():
+		Game_State_Manager.send_pile_claimed_notification(
+			int(claim_notification.get("claimant_peer_id", -1)),
+			claim_notification.get("card_data", {}),
+			bool(claim_notification.get("extra_card_drawn", false))
+		)
+
+	var round_update: Dictionary = result.get("round_update", {})
+	if not round_update.is_empty():
+		Game_State_Manager.send_round_update(
+			int(round_update.get("round", game_manager.round_number)),
+			str(round_update.get("current_player_name", game_manager.get_player_name(game_manager.current_player_index)))
+		)
+
+	var claim_timer_claim_id: int = int(result.get("claim_timer_claim_id", -1))
+	if claim_timer_claim_id != -1:
+		var claim_timer: SceneTreeTimer = get_tree().create_timer(float(CLAIM_WINDOW_SECONDS), false)
+		claim_timer.timeout.connect(func ():
+			if not _ensure_game_manager_bound():
+				return
+			var expiry_result: Dictionary = _ensure_turn_flow().apply_move(0, {
+				"type": "expire_claim",
+				"claim_window_id": claim_timer_claim_id
+			})
+			_apply_turn_flow_result(expiry_result)
+		)
+
+	if bool(result.get("public_state_changed", false)):
+		_broadcast_game_state()
+	return true
 
 func register_hand_reorder(peer_id: int, cards_data: Array) -> void:
 	if game_manager == null:
