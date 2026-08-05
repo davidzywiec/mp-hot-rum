@@ -6,6 +6,7 @@ const BASE_CORNER_FONT_SIZE: int = 16
 const BASE_CENTER_FONT_SIZE: int = 34
 const BASE_MARGIN_SIDE: int = 8
 const BASE_MARGIN_VERTICAL: int = 6
+const MDTheme: GDScript = preload("res://scripts/ui/morning_digest_theme.gd")
 
 @onready var margin_container: MarginContainer = $Margin
 @onready var rank_top_label: Label = $Margin/VB/TopRow/RankTop
@@ -89,13 +90,13 @@ func _refresh_content() -> void:
 func _apply_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	if _selected:
-		style.bg_color = Color(0.9, 0.95, 1.0)
-		style.border_color = Color(0.21, 0.55, 0.95)
+		style.bg_color = MDTheme.ACCENT_BLUE_BG
+		style.border_color = MDTheme.ACCENT_BLUE
 		style.set_border_width_all(3)
 	else:
 		style.bg_color = Color(0.98, 0.98, 0.96)
-		style.border_color = Color(0.1, 0.1, 0.1)
-		style.set_border_width_all(2)
+		style.border_color = MDTheme.BORDER_STRONG
+		style.set_border_width_all(1)
 	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("panel", style)
 

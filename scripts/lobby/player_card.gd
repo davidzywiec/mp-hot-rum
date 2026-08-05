@@ -5,10 +5,8 @@ class_name PlayerCard
 @onready
 var username_label : Label = $Label
 
-const TILE_BG_COLOR := Color(0.102, 0.157, 0.239, 0.95)
-const TILE_BORDER_COLOR := Color(0.168, 0.227, 0.329, 1.0)
-const TILE_READY_BORDER_COLOR := Color(0.38, 0.84, 0.44, 1.0)
-const TILE_READY_GLOW_COLOR := Color(0.28, 0.63, 0.33, 0.35)
+const MDTheme: GDScript = preload("res://scripts/ui/morning_digest_theme.gd")
+const TILE_READY_GLOW_COLOR := Color(0.290, 0.620, 1.0, 0.18)
 
 var _ready_state: bool = false
 
@@ -24,20 +22,20 @@ func set_ready(ready_status: bool) -> void:
 
 func _apply_tile_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = TILE_BG_COLOR
-	style.border_color = TILE_READY_BORDER_COLOR if _ready_state else TILE_BORDER_COLOR
+	style.bg_color = MDTheme.BG_CARD
+	style.border_color = MDTheme.ACCENT_BLUE if _ready_state else MDTheme.BORDER_DEFAULT
 	style.border_width_left = 2
 	style.border_width_top = 2
 	style.border_width_right = 2
 	style.border_width_bottom = 2
-	style.corner_radius_top_left = 14
-	style.corner_radius_top_right = 14
-	style.corner_radius_bottom_right = 14
-	style.corner_radius_bottom_left = 14
-	style.shadow_color = TILE_READY_GLOW_COLOR if _ready_state else Color(0, 0, 0, 0.18)
+	style.corner_radius_top_left = MDTheme.RADIUS_CARD
+	style.corner_radius_top_right = MDTheme.RADIUS_CARD
+	style.corner_radius_bottom_right = MDTheme.RADIUS_CARD
+	style.corner_radius_bottom_left = MDTheme.RADIUS_CARD
+	style.shadow_color = TILE_READY_GLOW_COLOR if _ready_state else MDTheme.SHADOW_CARD
 	style.shadow_size = 8 if _ready_state else 4
 	style.shadow_offset = Vector2(0, 2)
 	add_theme_stylebox_override("panel", style)
 
 	if username_label != null:
-		username_label.add_theme_color_override("font_color", Color(0.93, 0.95, 0.98, 1.0))
+		username_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)

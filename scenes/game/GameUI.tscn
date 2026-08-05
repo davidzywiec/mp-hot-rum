@@ -1,44 +1,52 @@
-[gd_scene load_steps=8 format=3 uid="uid://ch1dgmbxltdv8"]
+[gd_scene load_steps=6 format=3 uid="uid://ch1dgmbxltdv8"]
 
 [ext_resource type="Script" uid="uid://dghdt6tbxbaex" path="res://scripts/game/game_ui.gd" id="1_kofqh"]
 [ext_resource type="Theme" uid="uid://ddgkq8lj3umuh" path="res://Themes/GameUI.tres" id="2_t5mpo"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_round_rules"]
-bg_color = Color(0.22, 0.22, 0.22, 0.86)
-border_color = Color(0.42, 0.42, 0.42, 1)
+bg_color = Color(1, 1, 1, 1)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hand_area"]
-bg_color = Color(0.0705882, 0.101961, 0.160784, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status_card"]
-bg_color = Color(0.101961, 0.156863, 0.239216, 0.95)
-border_color = Color(0.168627, 0.227451, 0.329412, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
+border_color = Color(0.878, 0.878, 0.882, 1)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.06)
+shadow_size = 8
+shadow_offset = Vector2(0, 2)
 
-[sub_resource type="Shader" id="Shader_ui_background_gradient"]
-code = "shader_type canvas_item;\n\nvoid fragment() {\n\tvec2 uv = UV;\n\tvec3 base = vec3(0.082, 0.086, 0.102);\n\tvec3 deep_blue = vec3(0.035, 0.094, 0.235);\n\tvec3 mid_blue = vec3(0.095, 0.165, 0.310);\n\tvec3 slate = vec3(0.120, 0.170, 0.240);\n\n\tfloat diagonal = clamp(1.0 - abs((uv.x * 1.15 + (1.0 - uv.y) * 0.9) - 0.95), 0.0, 1.0);\n\tdiagonal = smoothstep(0.0, 1.0, diagonal);\n\tfloat top_glow = pow(1.0 - uv.y, 1.8);\n\tfloat left_glow = pow(1.0 - uv.x, 2.3);\n\tvec2 center_delta = (uv - vec2(0.56, 0.45)) * vec2(1.05, 0.9);\n\tvec2 top_left_delta = (uv - vec2(0.18, 0.10)) * vec2(1.4, 0.9);\n\tfloat center_bloom = exp(-14.0 * dot(center_delta, center_delta));\n\tfloat top_left_bloom = exp(-18.0 * dot(top_left_delta, top_left_delta));\n\n\tvec3 col = base;\n\tcol = mix(col, slate, 0.28 * top_glow);\n\tcol += deep_blue * (0.42 * diagonal + 0.22 * top_left_bloom);\n\tcol += mid_blue * (0.22 * center_bloom + 0.12 * top_glow + 0.10 * left_glow);\n\n\tfloat vignette = smoothstep(0.95, 0.2, length((uv - vec2(0.5)) * vec2(1.35, 1.05)));\n\tcol *= (1.0 - 0.14 * vignette);\n\tCOLOR = vec4(col, 1.0);\n}\n"
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hand_area"]
+bg_color = Color(1, 1, 1, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.878, 0.878, 0.882, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.06)
+shadow_size = 8
+shadow_offset = Vector2(0, 2)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_ui_background_gradient"]
-shader = SubResource("Shader_ui_background_gradient")
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status_card"]
+bg_color = Color(1, 1, 1, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.878, 0.878, 0.882, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.06)
+shadow_size = 8
+shadow_offset = Vector2(0, 2)
 
 [node name="GameUI" type="Control"]
 layout_mode = 3
@@ -56,9 +64,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-material = SubResource("ShaderMaterial_ui_background_gradient")
 mouse_filter = 2
-color = Color(1, 1, 1, 1)
+color = Color(0.953, 0.949, 0.929, 1)
 
 [node name="RoundDataContainer" type="Control" parent="."]
 layout_mode = 1
@@ -79,16 +86,7 @@ offset_bottom = 176.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_round_rules")
 
 [node name="RoundRulesLabel" type="Label" parent="RoundDataContainer/RoundRulesPanel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 text = "Round requirements..."
 autowrap_mode = 3
 
@@ -102,28 +100,19 @@ offset_left = 10.0
 offset_top = -216.0
 offset_right = -10.0
 offset_bottom = -10.0
+grow_horizontal = 2
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_hand_area")
 
 [node name="ContentMargin" type="MarginContainer" parent="RoundDataContainer/HandAreaPanel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
 [node name="HandAreaVB" type="VBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="Header" type="HBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
@@ -140,6 +129,21 @@ layout_mode = 2
 text = "0 cards"
 horizontal_alignment = 2
 
+[node name="CardsSpacer" type="Control" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HandScroll" type="ScrollContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
+custom_minimum_size = Vector2(0, 132)
+layout_mode = 2
+size_flags_horizontal = 3
+follow_focus = true
+
+[node name="HandContainer" type="HBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll"]
+layout_mode = 2
+theme_override_constants/separation = 5
+alignment = 1
+
 [node name="BottomControlsBar" type="HBoxContainer" parent="RoundDataContainer"]
 layout_mode = 1
 anchors_preset = 12
@@ -150,6 +154,7 @@ offset_left = 10.0
 offset_top = -260.0
 offset_right = -10.0
 offset_bottom = -220.0
+grow_horizontal = 2
 grow_vertical = 0
 theme_override_constants/separation = 8
 
@@ -206,15 +211,15 @@ text = "End Turn"
 
 [node name="TurnPickupOverlay" type="ColorRect" parent="RoundDataContainer"]
 visible = false
+z_index = 100
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-z_index = 100
 mouse_filter = 1
-color = Color(0, 0, 0, 0.7)
+color = Color(0.953, 0.949, 0.929, 0.86)
 
 [node name="Center" type="CenterContainer" parent="RoundDataContainer/TurnPickupOverlay"]
 layout_mode = 1
@@ -225,20 +230,11 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Panel" type="PanelContainer" parent="RoundDataContainer/TurnPickupOverlay/Center"]
-layout_mode = 2
 custom_minimum_size = Vector2(560, 240)
+layout_mode = 2
 
 [node name="VB" type="VBoxContainer" parent="RoundDataContainer/TurnPickupOverlay/Center/Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = -16.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="TitleLabel" type="Label" parent="RoundDataContainer/TurnPickupOverlay/Center/Panel/VB"]
@@ -258,8 +254,8 @@ text = "Minimize"
 
 [node name="Buttons" type="HBoxContainer" parent="RoundDataContainer/TurnPickupOverlay/Center/Panel/VB"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
+alignment = 1
 
 [node name="PickupDeckButton" type="Button" parent="RoundDataContainer/TurnPickupOverlay/Center/Panel/VB/Buttons"]
 layout_mode = 2
@@ -279,8 +275,8 @@ offset_left = 10.0
 offset_top = -288.0
 offset_right = -10.0
 offset_bottom = -264.0
+grow_horizontal = 2
 grow_vertical = 0
-text = ""
 horizontal_alignment = 1
 
 [node name="StagedAreaPanel" type="PanelContainer" parent="RoundDataContainer"]
@@ -294,15 +290,11 @@ offset_left = 10.0
 offset_top = -362.0
 offset_right = -10.0
 offset_bottom = -292.0
+grow_horizontal = 2
 grow_vertical = 0
 
 [node name="VB" type="VBoxContainer" parent="RoundDataContainer/StagedAreaPanel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/separation = 2
 
 [node name="StagedAreaTitle" type="Label" parent="RoundDataContainer/StagedAreaPanel/VB"]
@@ -320,6 +312,7 @@ theme_override_constants/separation = 4
 
 [node name="PileContainer" type="VBoxContainer" parent="RoundDataContainer"]
 layout_mode = 1
+anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
@@ -338,29 +331,13 @@ text = "Pile"
 horizontal_alignment = 1
 
 [node name="PileCardHolder" type="CenterContainer" parent="RoundDataContainer/PileContainer"]
-layout_mode = 2
 custom_minimum_size = Vector2(100, 132)
-
-[node name="CardsSpacer" type="Control" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
 layout_mode = 2
-size_flags_vertical = 3
-
-[node name="HandScroll" type="ScrollContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB"]
-layout_mode = 2
-size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 132)
-follow_focus = true
-
-[node name="HandContainer" type="HBoxContainer" parent="RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll"]
-layout_mode = 2
-theme_override_constants/separation = 5
-alignment = 1
 
 [node name="MC" type="MarginContainer" parent="RoundDataContainer"]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
 offset_left = -232.0
 offset_top = 12.0
@@ -378,18 +355,13 @@ theme = ExtResource("2_t5mpo")
 theme_override_constants/separation = 14
 
 [node name="RoundNumberContainer" type="PanelContainer" parent="RoundDataContainer/MC/VBCRoundData"]
-layout_mode = 2
 custom_minimum_size = Vector2(220, 88)
+layout_mode = 2
 theme = ExtResource("2_t5mpo")
 theme_override_styles/panel = SubResource("StyleBoxFlat_status_card")
 
 [node name="RoundNumberMargin" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData/RoundNumberContainer"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 14
@@ -401,26 +373,20 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme = ExtResource("2_t5mpo")
 bbcode_enabled = true
-text = "[color=#A2AFBF][font_size=12][b]#  ROUND[/b][/font_size][/color]\n[font_size=28][b]0[/b][/font_size]"
-fit_content = false
+text = "[color=#8C8C8E][font_size=12][b]#  ROUND[/b][/font_size][/color]
+[color=#2C2C2E][font_size=28][b]0[/b][/font_size][/color]"
 scroll_active = false
-autowrap_mode = 3
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="CurrentPlayerContainer" type="PanelContainer" parent="RoundDataContainer/MC/VBCRoundData"]
-layout_mode = 2
 custom_minimum_size = Vector2(220, 88)
+layout_mode = 2
 theme = ExtResource("2_t5mpo")
 theme_override_styles/panel = SubResource("StyleBoxFlat_status_card")
 
 [node name="CurrentPlayerMargin" type="MarginContainer" parent="RoundDataContainer/MC/VBCRoundData/CurrentPlayerContainer"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 14
@@ -432,10 +398,9 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme = ExtResource("2_t5mpo")
 bbcode_enabled = true
-text = "[color=#A2AFBF][font_size=12][b]CURRENT TURN[/b][/font_size][/color]\n[font_size=18][b]Player 1[/b][/font_size]"
-fit_content = false
+text = "[color=#8C8C8E][font_size=12][b]CURRENT TURN[/b][/font_size][/color]
+[color=#2C2C2E][font_size=18][b]Player 1[/b][/font_size][/color]"
 scroll_active = false
-autowrap_mode = 3
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -447,7 +412,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.72)
+color = Color(0.953, 0.949, 0.929, 0.88)
 
 [node name="Center" type="CenterContainer" parent="RoundDataContainer/GameOverOverlay"]
 layout_mode = 1
@@ -458,20 +423,11 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Panel" type="PanelContainer" parent="RoundDataContainer/GameOverOverlay/Center"]
-layout_mode = 2
 custom_minimum_size = Vector2(700, 440)
+layout_mode = 2
 
 [node name="VB" type="VBoxContainer" parent="RoundDataContainer/GameOverOverlay/Center/Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = -16.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="TitleLabel" type="Label" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
@@ -487,14 +443,11 @@ horizontal_alignment = 1
 [node name="ScoresText" type="RichTextLabel" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
 layout_mode = 2
 size_flags_vertical = 3
-bbcode_enabled = false
-scroll_active = true
-autowrap_mode = 3
 
 [node name="Buttons" type="HBoxContainer" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
+alignment = 1
 
 [node name="PlayAgainButton" type="Button" parent="RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons"]
 layout_mode = 2

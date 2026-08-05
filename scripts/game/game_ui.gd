@@ -51,6 +51,8 @@ const TURN_DEBUG: bool = true
 const PUT_DOWN_ERROR_DISPLAY_MS: int = 4500
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
 const DEBUG_UI_SETTING_PATH: String = "debug/ui_debug"
+const MORNING_DIGEST_THEME: Theme = preload("res://Themes/GameUI.tres")
+const MDTheme: GDScript = preload("res://scripts/ui/morning_digest_theme.gd")
 
 var _dragging_card: CardView = null
 var _drag_visual: CardView = null
@@ -69,13 +71,10 @@ var _round_rules_popup_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
 var _play_again_vote_peer_ids: Array[int] = []
 var _turn_pickup_overlay_minimized: bool = false
-var _button_style_normal: StyleBoxFlat = null
-var _button_style_hover: StyleBoxFlat = null
-var _button_style_pressed: StyleBoxFlat = null
-var _button_style_disabled: StyleBoxFlat = null
 var _button_style_restore: StyleBoxFlat = null
 
 func _ready() -> void:
+	theme = MORNING_DIGEST_THEME
 	_resolve_hand_nodes()
 	if end_turn_button != null:
 		end_turn_button.pressed.connect(_on_end_turn_pressed)
@@ -162,10 +161,10 @@ func update_round_ui(round: int, current_player_name: String) -> void:
 	print("Updating round UI: Round %d, Current Player: %s" % [round, current_player_name])
 	var safe_player_name: String = current_player_name.replace("[", "\\[").replace("]", "\\]")
 	round_number_label.clear()
-	round_number_label.parse_bbcode("[color=#A2AFBF][font_size=12][b]#  ROUND[/b][/font_size][/color]\n[font_size=28][b]%d[/b][/font_size]" % round)
+	round_number_label.parse_bbcode("[color=#8C8C8E][font_size=12][b]#  ROUND[/b][/font_size][/color]\n[color=#2C2C2E][font_size=28][b]%d[/b][/font_size][/color]" % round)
 	
 	current_player_label.clear()
-	current_player_label.parse_bbcode("[color=#A2AFBF][font_size=12][b]CURRENT TURN[/b][/font_size][/color]\n[font_size=18][b]%s[/b][/font_size]" % safe_player_name)
+	current_player_label.parse_bbcode("[color=#8C8C8E][font_size=12][b]CURRENT TURN[/b][/font_size][/color]\n[color=#2C2C2E][font_size=18][b]%s[/b][/font_size][/color]" % safe_player_name)
 	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
@@ -319,8 +318,8 @@ func _create_drag_placeholder(source_card: CardView) -> void:
 	placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	placeholder.custom_minimum_size = source_card.get_combined_minimum_size()
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.35, 0.6, 1.0, 0.18)
-	style.border_color = Color(0.35, 0.6, 1.0, 0.95)
+	style.bg_color = MDTheme.ACCENT_BLUE_BG
+	style.border_color = MDTheme.ACCENT_BLUE
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
 	placeholder.add_theme_stylebox_override("panel", style)
@@ -1179,10 +1178,12 @@ func _ensure_meld_board_popup() -> void:
 	var popup: AcceptDialog = AcceptDialog.new()
 	popup.title = "Meld Board"
 	popup.exclusive = false
+	_style_popup(popup)
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(720, 320)
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	var list: VBoxContainer = VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 8)
@@ -1200,6 +1201,7 @@ func _ensure_score_sheet_popup() -> void:
 	var popup: AcceptDialog = AcceptDialog.new()
 	popup.title = "Score Sheet"
 	popup.exclusive = false
+	_style_popup(popup)
 	var score_text: RichTextLabel = RichTextLabel.new()
 	score_text.custom_minimum_size = Vector2(720, 360)
 	score_text.scroll_active = true
@@ -1207,6 +1209,7 @@ func _ensure_score_sheet_popup() -> void:
 	score_text.fit_content = false
 	score_text.selection_enabled = true
 	score_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	MDTheme.apply_rich_text_label(score_text)
 	popup.add_child(score_text)
 	add_child(popup)
 	_apply_card_button_theme_to_tree(popup)
@@ -1219,6 +1222,7 @@ func _ensure_round_rules_popup() -> void:
 	var popup: AcceptDialog = AcceptDialog.new()
 	popup.title = "Current Round Rules"
 	popup.exclusive = false
+	_style_popup(popup)
 	var rules_text: RichTextLabel = RichTextLabel.new()
 	rules_text.custom_minimum_size = Vector2(720, 320)
 	rules_text.scroll_active = true
@@ -1226,6 +1230,7 @@ func _ensure_round_rules_popup() -> void:
 	rules_text.fit_content = false
 	rules_text.selection_enabled = true
 	rules_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	MDTheme.apply_rich_text_label(rules_text)
 	popup.add_child(rules_text)
 	add_child(popup)
 	_apply_card_button_theme_to_tree(popup)
@@ -1256,6 +1261,7 @@ func _refresh_meld_board() -> void:
 	if melds.is_empty():
 		var empty_label: Label = Label.new()
 		empty_label.text = "No melds are down yet."
+		empty_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
 		_meld_board_list.add_child(empty_label)
 		return
 
@@ -1273,17 +1279,21 @@ func _refresh_meld_board() -> void:
 
 		var panel: PanelContainer = PanelContainer.new()
 		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		MDTheme.apply_panel_container(panel)
 		var content: VBoxContainer = VBoxContainer.new()
 		content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content.add_theme_constant_override("separation", 6)
 		panel.add_child(content)
 
 		var header: Label = Label.new()
 		header.text = "%s - %s (Meld #%d)" % [owner_name, type_text, meld_id]
+		header.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
 		content.add_child(header)
 
 		var cards_label: Label = Label.new()
 		cards_label.text = "Cards: %s" % cards_text
 		cards_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		cards_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
 		content.add_child(cards_label)
 
 		if _can_local_add_to_meld(meld_data):
@@ -1412,16 +1422,13 @@ func _update_turn_pickup_restore_indicator() -> void:
 		return
 	if not turn_pickup_restore_button.visible:
 		turn_pickup_restore_button.modulate = Color.WHITE
-		if _button_style_normal != null:
-			turn_pickup_restore_button.add_theme_stylebox_override("normal", _button_style_normal)
-			turn_pickup_restore_button.add_theme_stylebox_override("hover", _button_style_hover)
-			turn_pickup_restore_button.add_theme_stylebox_override("focus", _button_style_hover)
+		MDTheme.apply_button(turn_pickup_restore_button)
 		return
 	var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 180.0)
-	turn_pickup_restore_button.modulate = Color(1.0, 0.90 + (0.10 * pulse), 0.55 + (0.35 * pulse), 1.0)
+	turn_pickup_restore_button.modulate = Color(0.82 + (0.18 * pulse), 0.91 + (0.09 * pulse), 1.0, 1.0)
 	_ensure_turn_pickup_restore_style()
-	_button_style_restore.border_color = Color(1.0, 0.78 + (0.20 * pulse), 0.25 + (0.35 * pulse), 1.0)
-	_button_style_restore.shadow_color = Color(1.0, 0.68, 0.18, 0.35 + (0.35 * pulse))
+	_button_style_restore.border_color = Color(0.290, 0.620, 1.0, 0.60 + (0.35 * pulse))
+	_button_style_restore.shadow_color = Color(0.290, 0.620, 1.0, 0.14 + (0.22 * pulse))
 	_button_style_restore.shadow_size = 6 + int(5.0 * pulse)
 	turn_pickup_restore_button.add_theme_stylebox_override("normal", _button_style_restore)
 	turn_pickup_restore_button.add_theme_stylebox_override("hover", _button_style_restore)
@@ -1430,10 +1437,9 @@ func _update_turn_pickup_restore_indicator() -> void:
 func _ensure_turn_pickup_restore_style() -> void:
 	if _button_style_restore != null:
 		return
-	_ensure_card_button_styles()
-	_button_style_restore = _make_button_style(
-		Color(0.16, 0.15, 0.09, 0.98),
-		Color(1.0, 0.82, 0.30, 1.0)
+	_button_style_restore = MDTheme.make_button_style(
+		MDTheme.ACCENT_BLUE_BG,
+		MDTheme.ACCENT_BLUE_BORDER
 	)
 	_button_style_restore.border_width_left = 2
 	_button_style_restore.border_width_top = 2
@@ -1443,64 +1449,23 @@ func _ensure_turn_pickup_restore_style() -> void:
 func _apply_card_button_theme_to_tree(root: Node) -> void:
 	if root == null:
 		return
+	if root == debug_end_game_button:
+		return
 	if root is Button:
 		_style_card_button(root as Button)
 	for child in root.get_children():
 		_apply_card_button_theme_to_tree(child)
 
+func _style_popup(popup: AcceptDialog) -> void:
+	if popup == null:
+		return
+	popup.theme = MORNING_DIGEST_THEME
+	popup.add_theme_stylebox_override("panel", MDTheme.make_panel_style())
+
 func _style_card_button(button: Button) -> void:
 	if button == null:
 		return
-	_ensure_card_button_styles()
-	button.add_theme_stylebox_override("normal", _button_style_normal)
-	button.add_theme_stylebox_override("hover", _button_style_hover)
-	button.add_theme_stylebox_override("pressed", _button_style_pressed)
-	button.add_theme_stylebox_override("focus", _button_style_hover)
-	button.add_theme_stylebox_override("disabled", _button_style_disabled)
-	button.add_theme_color_override("font_color", Color(0.93, 0.95, 0.98, 1.0))
-	button.add_theme_color_override("font_hover_color", Color(0.98, 0.99, 1.0, 1.0))
-	button.add_theme_color_override("font_pressed_color", Color(1, 1, 1, 1))
-	button.add_theme_color_override("font_disabled_color", Color(0.52, 0.56, 0.62, 1.0))
-	button.add_theme_color_override("font_focus_color", Color(0.98, 0.99, 1.0, 1.0))
-	button.add_theme_constant_override("h_separation", 6)
-
-func _ensure_card_button_styles() -> void:
-	if _button_style_normal != null:
-		return
-	_button_style_normal = _make_button_style(
-		Color(0.102, 0.157, 0.239, 0.94),
-		Color(0.168, 0.227, 0.329, 1.0)
-	)
-	_button_style_hover = _make_button_style(
-		Color(0.125, 0.188, 0.286, 0.97),
-		Color(0.235, 0.313, 0.447, 1.0)
-	)
-	_button_style_pressed = _make_button_style(
-		Color(0.082, 0.129, 0.204, 1.0),
-		Color(0.219, 0.298, 0.431, 1.0)
-	)
-	_button_style_disabled = _make_button_style(
-		Color(0.090, 0.110, 0.145, 0.88),
-		Color(0.148, 0.168, 0.211, 0.9)
-	)
-
-func _make_button_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.corner_radius_bottom_right = 10
-	style.corner_radius_bottom_left = 10
-	style.content_margin_left = 12
-	style.content_margin_top = 7
-	style.content_margin_right = 12
-	style.content_margin_bottom = 7
-	return style
+	MDTheme.apply_button(button)
 
 func _on_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
 	_ensure_claim_popup()
@@ -1532,6 +1497,7 @@ func _ensure_claim_popup() -> void:
 	var popup: AcceptDialog = AcceptDialog.new()
 	popup.title = "Pile Claimed"
 	popup.exclusive = true
+	_style_popup(popup)
 	add_child(popup)
 	_apply_card_button_theme_to_tree(popup)
 	claim_popup = popup
@@ -1542,6 +1508,7 @@ func _ensure_put_down_error_popup() -> void:
 	var popup: AcceptDialog = AcceptDialog.new()
 	popup.title = "Invalid Put Down"
 	popup.exclusive = true
+	_style_popup(popup)
 	add_child(popup)
 	_apply_card_button_theme_to_tree(popup)
 	put_down_error_popup = popup
