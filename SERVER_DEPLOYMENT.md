@@ -66,6 +66,8 @@ Expected server files:
 - `Dockerfile`
 - `docker-compose.yml`
 
+The production Docker path is intentionally `linux/amd64`. The Amazon server runs the x86_64 Godot server export, and `docker-compose.yml` pins `platform: linux/amd64` to keep the image architecture aligned with that export.
+
 ## Update and Redeploy Server (Each Release)
 
 ### 1) Build/export latest server locally
