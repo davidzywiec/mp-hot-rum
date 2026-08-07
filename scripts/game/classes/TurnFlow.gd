@@ -52,6 +52,16 @@ func reset_claim_tracking() -> void:
 func eligible_claim_peer_ids() -> Array:
 	return _eligible_claim_peer_ids()
 
+func passed_claim_peer_ids() -> Array:
+	var eligible_peer_ids: Array = _eligible_claim_peer_ids()
+	var passed: Array = []
+	for raw_peer_id in claim_passed_peer_ids.keys():
+		var peer_id: int = int(raw_peer_id)
+		if eligible_peer_ids.has(peer_id):
+			passed.append(peer_id)
+	passed.sort()
+	return passed
+
 func _draw_from_deck(peer_id: int, move: Dictionary) -> Dictionary:
 	var validation: Dictionary = _validate_current_turn_peer(peer_id)
 	if not bool(validation.get("ok", false)):

@@ -1414,16 +1414,40 @@ func _update_claim_status_label() -> void:
 		else:
 			claim_status_label.text = ""
 		return
-	if not _should_show_local_claim_window():
-		claim_status_label.text = ""
-		return
-	if _local_claim_offer_passed:
-		claim_status_label.text = "You passed on this pile offer."
-		return
 	var now_unix: int = int(Time.get_unix_time_from_system())
 	var remaining: int = maxi(0, GameManager.claim_deadline_unix - now_unix)
 	var card_text: String = _card_to_short_text(GameManager.get_discard_top_card())
-	claim_status_label.text = "Claim window: %ds for %s" % [remaining, card_text]
+	var pending_names: Array[String] = _claim_pending_player_names()
+	var passed_names: Array[String] = _claim_passed_player_names()
+	var pending_text: String = "None" if pending_names.is_empty() else ", ".join(pending_names)
+	var passed_text: String = "None" if passed_names.is_empty() else ", ".join(passed_names)
+	claim_status_label.text = "Claim window: %ds for %s | Pending: %s | Passed: %s" % [
+		remaining,
+		card_text,
+		pending_text,
+		passed_text
+	]
+
+func _claim_pending_player_names() -> Array[String]:
+	return _claim_response_player_names(false)
+
+func _claim_passed_player_names() -> Array[String]:
+	return _claim_response_player_names(true)
+
+func _claim_response_player_names(include_passed: bool) -> Array[String]:
+	var names: Array[String] = []
+	for raw_peer_id in GameManager.claim_eligible_peer_ids:
+		var peer_id: int = int(raw_peer_id)
+		if _has_peer_passed_claim_offer(peer_id) == include_passed:
+			names.append(_player_name_from_peer_id(peer_id))
+	names.sort()
+	return names
+
+func _has_peer_passed_claim_offer(peer_id: int) -> bool:
+	if GameManager.claim_passed_peer_ids.has(peer_id):
+		return true
+	var local_peer_id: int = multiplayer.get_unique_id()
+	return _local_claim_offer_passed and peer_id == local_peer_id
 
 func _update_turn_pickup_restore_indicator() -> void:
 	if turn_pickup_restore_button == null:

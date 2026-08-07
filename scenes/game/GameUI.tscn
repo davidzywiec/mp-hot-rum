@@ -272,12 +272,13 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = -288.0
+offset_top = -308.0
 offset_right = -10.0
 offset_bottom = -264.0
 grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
+autowrap_mode = 3
 
 [node name="StagedAreaPanel" type="PanelContainer" parent="RoundDataContainer"]
 visible = false
