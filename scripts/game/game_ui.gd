@@ -81,6 +81,7 @@ var _turn_pickup_overlay_minimized: bool = false
 var _button_style_restore: StyleBoxFlat = null
 var _claim_window_table_signature: String = ""
 var _claim_window_minimized: bool = false
+var _last_claim_window_rows: Array = []
 
 func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
@@ -1469,9 +1470,10 @@ func _update_claim_window_table() -> void:
 
 func _claim_window_rows_for_display() -> Array:
 	if not GameManager.claim_status_rows.is_empty():
+		_last_claim_window_rows = GameManager.claim_status_rows.duplicate(true)
 		return GameManager.claim_status_rows
 	if not GameManager.claim_window_active:
-		return []
+		return _last_claim_window_rows
 	var rows: Array = []
 	var peer_ids: Array = []
 	for raw_peer_id in GameManager.players.keys():
@@ -1489,6 +1491,8 @@ func _claim_window_rows_for_display() -> Array:
 			"name": _player_name_from_peer_id(peer_id),
 			"status": status
 		})
+	if not rows.is_empty():
+		_last_claim_window_rows = rows.duplicate(true)
 	return rows
 
 func _update_claim_window_panel_layout() -> void:
