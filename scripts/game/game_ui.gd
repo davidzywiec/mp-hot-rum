@@ -1441,7 +1441,7 @@ func _update_claim_status_label() -> void:
 func _update_claim_window_table() -> void:
 	if claim_window_panel == null or claim_window_rows == null:
 		return
-	var rows: Array = GameManager.claim_status_rows
+	var rows: Array = _claim_window_rows_for_display()
 	var should_show: bool = not rows.is_empty()
 	claim_window_panel.visible = should_show
 	if not should_show:
@@ -1466,6 +1466,30 @@ func _update_claim_window_table() -> void:
 			continue
 		var row: Dictionary = raw_row
 		claim_window_rows.add_child(_build_claim_status_row(str(row.get("name", "Unknown")), str(row.get("status", GameManager.CLAIM_STATUS_PASSED))))
+
+func _claim_window_rows_for_display() -> Array:
+	if not GameManager.claim_status_rows.is_empty():
+		return GameManager.claim_status_rows
+	if not GameManager.claim_window_active:
+		return []
+	var rows: Array = []
+	var peer_ids: Array = []
+	for raw_peer_id in GameManager.players.keys():
+		peer_ids.append(int(raw_peer_id))
+	peer_ids.sort()
+	for raw_peer_id in peer_ids:
+		var peer_id: int = int(raw_peer_id)
+		var status: String = GameManager.CLAIM_STATUS_PASSED
+		if GameManager.claim_eligible_peer_ids.has(peer_id):
+			status = GameManager.CLAIM_STATUS_PENDING
+			if GameManager.claim_passed_peer_ids.has(peer_id):
+				status = GameManager.CLAIM_STATUS_PASSED
+		rows.append({
+			"peer_id": peer_id,
+			"name": _player_name_from_peer_id(peer_id),
+			"status": status
+		})
+	return rows
 
 func _update_claim_window_panel_layout() -> void:
 	if claim_window_panel == null:
