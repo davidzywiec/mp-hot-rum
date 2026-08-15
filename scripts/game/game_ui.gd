@@ -1031,6 +1031,7 @@ func _on_pass_pile_pressed() -> void:
 		_update_action_buttons_state()
 		return
 	_local_claim_offer_passed = true
+	_mark_claim_window_passed(multiplayer.get_unique_id())
 	if multiplayer.is_server() or OS.has_feature("server"):
 		if Network_Manager.handler is ServerHandler:
 			var local_peer_id: int = multiplayer.get_unique_id()
@@ -1630,6 +1631,23 @@ func _mark_claim_window_claimed(claimant_peer_id: int) -> void:
 		if peer_id == claimant_peer_id:
 			row["status"] = GameManager.CLAIM_STATUS_CLAIMED
 		elif str(row.get("status", "")) == GameManager.CLAIM_STATUS_PENDING:
+			row["status"] = GameManager.CLAIM_STATUS_PASSED
+		updated_rows.append(row)
+	GameManager.claim_status_rows = updated_rows.duplicate(true)
+	_last_claim_window_rows = updated_rows.duplicate(true)
+	_claim_window_table_signature = ""
+	_update_claim_window_table()
+
+func _mark_claim_window_passed(passed_peer_id: int) -> void:
+	var rows: Array = _claim_window_rows_for_display().duplicate(true)
+	if rows.is_empty():
+		return
+	var updated_rows: Array = []
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = (raw_row as Dictionary).duplicate(true)
+		if int(row.get("peer_id", -1)) == passed_peer_id:
 			row["status"] = GameManager.CLAIM_STATUS_PASSED
 		updated_rows.append(row)
 	GameManager.claim_status_rows = updated_rows.duplicate(true)
