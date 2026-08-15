@@ -18,6 +18,9 @@ var put_down_button: Button = null
 var discard_selected_button: Button = null
 var clear_selection_button: Button = null
 var claim_status_label: Label = null
+var claim_window_panel: PanelContainer = null
+var claim_window_timer_label: Label = null
+var claim_window_rows: VBoxContainer = null
 var claim_popup: AcceptDialog = null
 var put_down_error_popup: AcceptDialog = null
 var staged_panel: PanelContainer = null
@@ -72,6 +75,7 @@ var _local_claim_offer_passed: bool = false
 var _play_again_vote_peer_ids: Array[int] = []
 var _turn_pickup_overlay_minimized: bool = false
 var _button_style_restore: StyleBoxFlat = null
+var _claim_window_table_signature: String = ""
 
 func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
@@ -111,6 +115,7 @@ func _ready() -> void:
 	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
+	_update_claim_window_table()
 	_refresh_meld_board_if_open()
 	_update_pile_view()
 	_update_round_rules_ui()
@@ -140,6 +145,7 @@ func _on_game_state_updated(state: Dictionary) -> void:
 	pull_round_ui()
 	_update_action_buttons_state()
 	_update_claim_status_label()
+	_update_claim_window_table()
 	_update_pile_view()
 	_update_round_rules_ui()
 	_update_game_over_overlay()
@@ -409,6 +415,9 @@ func _resolve_hand_nodes() -> void:
 	discard_selected_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/DiscardSelectedButton") as Button
 	clear_selection_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ClearSelectionButton") as Button
 	claim_status_label = get_node_or_null("RoundDataContainer/ClaimStatusLabel") as Label
+	claim_window_panel = get_node_or_null("RoundDataContainer/ClaimWindowPanel") as PanelContainer
+	claim_window_timer_label = get_node_or_null("RoundDataContainer/ClaimWindowPanel/Margin/VB/Header/TimerLabel") as Label
+	claim_window_rows = get_node_or_null("RoundDataContainer/ClaimWindowPanel/Margin/VB/Rows") as VBoxContainer
 	staged_panel = get_node_or_null("RoundDataContainer/StagedAreaPanel") as PanelContainer
 	staged_title_label = get_node_or_null("RoundDataContainer/StagedAreaPanel/VB/StagedAreaTitle") as Label
 	staged_scroll = get_node_or_null("RoundDataContainer/StagedAreaPanel/VB/StagedAreaScroll") as ScrollContainer
@@ -1376,6 +1385,7 @@ func _on_add_selected_to_meld_pressed(meld_id: int) -> void:
 
 func _process(_delta: float) -> void:
 	_update_claim_status_label()
+	_update_claim_window_table()
 	_update_turn_pickup_restore_indicator()
 
 func _update_claim_status_label() -> void:
@@ -1383,6 +1393,9 @@ func _update_claim_status_label() -> void:
 		return
 	if GameManager.game_over:
 		claim_status_label.text = _game_over_status_text()
+		return
+	if GameManager.claim_window_active:
+		claim_status_label.text = ""
 		return
 	if not GameManager.claim_window_active:
 		var now_msec: int = int(Time.get_ticks_msec())
@@ -1414,40 +1427,78 @@ func _update_claim_status_label() -> void:
 		else:
 			claim_status_label.text = ""
 		return
-	var now_unix: int = int(Time.get_unix_time_from_system())
-	var remaining: int = maxi(0, GameManager.claim_deadline_unix - now_unix)
-	var card_text: String = _card_to_short_text(GameManager.get_discard_top_card())
-	var pending_names: Array[String] = _claim_pending_player_names()
-	var passed_names: Array[String] = _claim_passed_player_names()
-	var pending_text: String = "None" if pending_names.is_empty() else ", ".join(pending_names)
-	var passed_text: String = "None" if passed_names.is_empty() else ", ".join(passed_names)
-	claim_status_label.text = "Claim window: %ds for %s | Pending: %s | Passed: %s" % [
-		remaining,
-		card_text,
-		pending_text,
-		passed_text
-	]
 
-func _claim_pending_player_names() -> Array[String]:
-	return _claim_response_player_names(false)
+func _update_claim_window_table() -> void:
+	if claim_window_panel == null or claim_window_rows == null:
+		return
+	var rows: Array = GameManager.claim_status_rows
+	var should_show: bool = not rows.is_empty()
+	claim_window_panel.visible = should_show
+	if not should_show:
+		_claim_window_table_signature = ""
+		return
+	if claim_window_timer_label != null:
+		if GameManager.claim_window_active:
+			var now_unix: int = int(Time.get_unix_time_from_system())
+			var remaining: int = maxi(0, GameManager.claim_deadline_unix - now_unix)
+			claim_window_timer_label.text = "%ds" % remaining
+		else:
+			claim_window_timer_label.text = "Resolved"
+	var next_signature: String = _claim_status_rows_signature(rows)
+	if next_signature == _claim_window_table_signature:
+		return
+	_claim_window_table_signature = next_signature
+	for child in claim_window_rows.get_children():
+		child.queue_free()
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = raw_row
+		claim_window_rows.add_child(_build_claim_status_row(str(row.get("name", "Unknown")), str(row.get("status", GameManager.CLAIM_STATUS_PASSED))))
 
-func _claim_passed_player_names() -> Array[String]:
-	return _claim_response_player_names(true)
+func _claim_status_rows_signature(rows: Array) -> String:
+	var parts: Array[String] = []
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = raw_row
+		parts.append("%s:%s:%s" % [
+			str(row.get("peer_id", "")),
+			str(row.get("name", "")),
+			str(row.get("status", ""))
+		])
+	return "|".join(parts)
 
-func _claim_response_player_names(include_passed: bool) -> Array[String]:
-	var names: Array[String] = []
-	for raw_peer_id in GameManager.claim_eligible_peer_ids:
-		var peer_id: int = int(raw_peer_id)
-		if _has_peer_passed_claim_offer(peer_id) == include_passed:
-			names.append(_player_name_from_peer_id(peer_id))
-	names.sort()
-	return names
+func _build_claim_status_row(player_name: String, status: String) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var name_label: Label = Label.new()
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.clip_text = true
+	name_label.text = player_name
+	_style_claim_table_label(name_label, MorningDigestTheme.TEXT_PRIMARY)
+	row.add_child(name_label)
+	var status_label: Label = Label.new()
+	status_label.custom_minimum_size = Vector2(112, 0)
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status_label.clip_text = true
+	status_label.text = status
+	_style_claim_table_label(status_label, _claim_status_color(status))
+	row.add_child(status_label)
+	return row
 
-func _has_peer_passed_claim_offer(peer_id: int) -> bool:
-	if GameManager.claim_passed_peer_ids.has(peer_id):
-		return true
-	var local_peer_id: int = multiplayer.get_unique_id()
-	return _local_claim_offer_passed and peer_id == local_peer_id
+func _style_claim_table_label(label: Label, color: Color) -> void:
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_font_size_override("font_size", 13)
+
+func _claim_status_color(status: String) -> Color:
+	if status == GameManager.CLAIM_STATUS_CLAIMED:
+		return MorningDigestTheme.ACCENT_GREEN
+	if status == GameManager.CLAIM_STATUS_AUTO_PASSED:
+		return Color(0.580, 0.450, 0.140, 1.0)
+	if status == GameManager.CLAIM_STATUS_PENDING:
+		return MorningDigestTheme.ACCENT_BLUE
+	return Color(0.430, 0.430, 0.440, 1.0)
 
 func _update_turn_pickup_restore_indicator() -> void:
 	if turn_pickup_restore_button == null:

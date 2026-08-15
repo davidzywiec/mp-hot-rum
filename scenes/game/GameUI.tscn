@@ -90,6 +90,64 @@ layout_mode = 2
 text = "Round requirements..."
 autowrap_mode = 3
 
+[node name="ClaimWindowPanel" type="PanelContainer" parent="RoundDataContainer"]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -370.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 190.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_status_card")
+
+[node name="Margin" type="MarginContainer" parent="RoundDataContainer/ClaimWindowPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="VB" type="VBoxContainer" parent="RoundDataContainer/ClaimWindowPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="HBoxContainer" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Claim Window"
+
+[node name="TimerLabel" type="Label" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB/Header"]
+layout_mode = 2
+text = ""
+horizontal_alignment = 2
+
+[node name="TableHeader" type="HBoxContainer" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayerHeader" type="Label" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB/TableHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Player"
+
+[node name="StatusHeader" type="Label" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB/TableHeader"]
+layout_mode = 2
+custom_minimum_size = Vector2(112, 0)
+text = "Status"
+horizontal_alignment = 2
+
+[node name="Rows" type="VBoxContainer" parent="RoundDataContainer/ClaimWindowPanel/Margin/VB"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 2
+
 [node name="HandAreaPanel" type="PanelContainer" parent="RoundDataContainer"]
 layout_mode = 1
 anchors_preset = 12

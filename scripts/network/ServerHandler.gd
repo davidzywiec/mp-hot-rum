@@ -459,6 +459,7 @@ func _broadcast_game_state() -> void:
 		"claim_opened_by_peer_id": game_manager.claim_opened_by_peer_id,
 		"claim_eligible_peer_ids": claim_eligible_peer_ids,
 		"claim_passed_peer_ids": claim_passed_peer_ids,
+		"claim_status_rows": game_manager.claim_status_rows.duplicate(true),
 		"turn_pickup_completed": game_manager.turn_pickup_completed,
 		"turn_discard_completed": game_manager.turn_discard_completed,
 		"put_down_player_ids": game_manager.get_put_down_player_ids(),
