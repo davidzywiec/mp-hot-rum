@@ -20,6 +20,8 @@ var clear_selection_button: Button = null
 var claim_status_label: Label = null
 var claim_window_panel: PanelContainer = null
 var claim_window_timer_label: Label = null
+var claim_window_toggle_button: Button = null
+var claim_window_table_header: HBoxContainer = null
 var claim_window_rows: VBoxContainer = null
 var claim_popup: AcceptDialog = null
 var put_down_error_popup: AcceptDialog = null
@@ -56,6 +58,8 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
 const DEBUG_UI_SETTING_PATH: String = "debug/ui_debug"
 const MORNING_DIGEST_THEME: Theme = preload("res://Themes/GameUI.tres")
 const MDTheme: GDScript = preload("res://scripts/ui/morning_digest_theme.gd")
+const CLAIM_WINDOW_PANEL_EXPANDED_BOTTOM: float = 370.0
+const CLAIM_WINDOW_PANEL_MINIMIZED_BOTTOM: float = 238.0
 
 var _dragging_card: CardView = null
 var _drag_visual: CardView = null
@@ -76,6 +80,7 @@ var _play_again_vote_peer_ids: Array[int] = []
 var _turn_pickup_overlay_minimized: bool = false
 var _button_style_restore: StyleBoxFlat = null
 var _claim_window_table_signature: String = ""
+var _claim_window_minimized: bool = false
 
 func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
@@ -108,6 +113,8 @@ func _ready() -> void:
 		turn_pickup_discard_button.pressed.connect(_on_turn_pickup_discard_pressed)
 	if turn_pickup_restore_button != null:
 		turn_pickup_restore_button.pressed.connect(_on_turn_pickup_restore_pressed)
+	if claim_window_toggle_button != null:
+		claim_window_toggle_button.pressed.connect(_on_claim_window_toggle_pressed)
 	if play_again_game_button != null:
 		play_again_game_button.pressed.connect(_on_play_again_game_pressed)
 	if leave_game_button != null:
@@ -417,6 +424,8 @@ func _resolve_hand_nodes() -> void:
 	claim_status_label = get_node_or_null("RoundDataContainer/ClaimStatusLabel") as Label
 	claim_window_panel = get_node_or_null("RoundDataContainer/ClaimWindowPanel") as PanelContainer
 	claim_window_timer_label = get_node_or_null("RoundDataContainer/ClaimWindowPanel/Margin/VB/Header/TimerLabel") as Label
+	claim_window_toggle_button = get_node_or_null("RoundDataContainer/ClaimWindowPanel/Margin/VB/Header/ToggleButton") as Button
+	claim_window_table_header = get_node_or_null("RoundDataContainer/ClaimWindowPanel/Margin/VB/TableHeader") as HBoxContainer
 	claim_window_rows = get_node_or_null("RoundDataContainer/ClaimWindowPanel/Margin/VB/Rows") as VBoxContainer
 	staged_panel = get_node_or_null("RoundDataContainer/StagedAreaPanel") as PanelContainer
 	staged_title_label = get_node_or_null("RoundDataContainer/StagedAreaPanel/VB/StagedAreaTitle") as Label
@@ -1437,6 +1446,7 @@ func _update_claim_window_table() -> void:
 	if not should_show:
 		_claim_window_table_signature = ""
 		return
+	_update_claim_window_panel_layout()
 	if claim_window_timer_label != null:
 		if GameManager.claim_window_active:
 			var now_unix: int = int(Time.get_unix_time_from_system())
@@ -1455,6 +1465,21 @@ func _update_claim_window_table() -> void:
 			continue
 		var row: Dictionary = raw_row
 		claim_window_rows.add_child(_build_claim_status_row(str(row.get("name", "Unknown")), str(row.get("status", GameManager.CLAIM_STATUS_PASSED))))
+
+func _update_claim_window_panel_layout() -> void:
+	if claim_window_panel == null:
+		return
+	claim_window_panel.offset_bottom = CLAIM_WINDOW_PANEL_MINIMIZED_BOTTOM if _claim_window_minimized else CLAIM_WINDOW_PANEL_EXPANDED_BOTTOM
+	if claim_window_table_header != null:
+		claim_window_table_header.visible = not _claim_window_minimized
+	if claim_window_rows != null:
+		claim_window_rows.visible = not _claim_window_minimized
+	if claim_window_toggle_button != null:
+		claim_window_toggle_button.text = "Maximize" if _claim_window_minimized else "Minimize"
+
+func _on_claim_window_toggle_pressed() -> void:
+	_claim_window_minimized = not _claim_window_minimized
+	_update_claim_window_panel_layout()
 
 func _claim_status_rows_signature(rows: Array) -> String:
 	var parts: Array[String] = []
