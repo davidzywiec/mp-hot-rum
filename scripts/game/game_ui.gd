@@ -1442,7 +1442,7 @@ func _update_claim_window_table() -> void:
 	if claim_window_panel == null or claim_window_rows == null:
 		return
 	var rows: Array = _claim_window_rows_for_display()
-	var should_show: bool = not rows.is_empty()
+	var should_show: bool = GameManager.claim_window_active or not rows.is_empty()
 	claim_window_panel.visible = should_show
 	if not should_show:
 		_claim_window_table_signature = ""
