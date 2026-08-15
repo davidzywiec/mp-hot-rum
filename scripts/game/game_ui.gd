@@ -1605,6 +1605,7 @@ func _style_card_button(button: Button) -> void:
 	MDTheme.apply_button(button)
 
 func _on_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
+	_mark_claim_window_claimed(claimant_peer_id)
 	_ensure_claim_popup()
 	if claim_popup == null:
 		return
@@ -1615,6 +1616,26 @@ func _on_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary,
 		extra_text = " They also drew an extra card from the deck."
 	claim_popup.dialog_text = "%s claimed %s from the pile.%s" % [claimant_name, card_text, extra_text]
 	claim_popup.popup_centered(Vector2i(520, 180))
+
+func _mark_claim_window_claimed(claimant_peer_id: int) -> void:
+	var rows: Array = _claim_window_rows_for_display().duplicate(true)
+	if rows.is_empty():
+		return
+	var updated_rows: Array = []
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = (raw_row as Dictionary).duplicate(true)
+		var peer_id: int = int(row.get("peer_id", -1))
+		if peer_id == claimant_peer_id:
+			row["status"] = GameManager.CLAIM_STATUS_CLAIMED
+		elif str(row.get("status", "")) == GameManager.CLAIM_STATUS_PENDING:
+			row["status"] = GameManager.CLAIM_STATUS_PASSED
+		updated_rows.append(row)
+	GameManager.claim_status_rows = updated_rows.duplicate(true)
+	_last_claim_window_rows = updated_rows.duplicate(true)
+	_claim_window_table_signature = ""
+	_update_claim_window_table()
 
 func _on_put_down_error(message: String) -> void:
 	var clean_message: String = message.strip_edges()
