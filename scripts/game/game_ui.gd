@@ -143,6 +143,7 @@ func _ready() -> void:
 	_render_local_hand()
 
 func _on_game_state_updated(state: Dictionary) -> void:
+	GameManager.apply_game_state(state)
 	_update_play_again_votes_from_state(state)
 	if not GameManager.claim_window_active:
 		_local_claim_offer_passed = false

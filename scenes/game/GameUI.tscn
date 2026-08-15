@@ -93,6 +93,7 @@ autowrap_mode = 3
 [node name="ClaimWindowPanel" type="PanelContainer" parent="RoundDataContainer"]
 visible = false
 layout_mode = 1
+z_index = 120
 offset_left = 10.0
 offset_top = 190.0
 offset_right = 370.0
