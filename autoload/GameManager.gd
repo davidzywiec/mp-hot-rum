@@ -21,6 +21,7 @@ var claim_window_id: int = 0
 var claim_eligible_peer_ids: Array = []
 var claim_passed_peer_ids: Array = []
 var claim_status_rows: Array = []
+var claim_last_passed_peer_id: int = -1
 var turn_pickup_completed: bool = false
 var turn_discard_completed: bool = false
 var player_put_down_status: Dictionary = {} # key: peer_id, value: bool
@@ -413,6 +414,7 @@ func open_claim_window(opened_by_peer_id: int, duration_seconds: int) -> int:
 	claim_window_active = true
 	claim_opened_by_peer_id = opened_by_peer_id
 	claim_deadline_unix = int(Time.get_unix_time_from_system()) + maxi(1, duration_seconds)
+	claim_last_passed_peer_id = -1
 	return claim_window_id
 
 func clear_claim_window() -> void:
@@ -920,6 +922,7 @@ func apply_game_state(state: Dictionary) -> void:
 	claim_passed_peer_ids.clear()
 	for raw_peer_id in state.get("claim_passed_peer_ids", []):
 		claim_passed_peer_ids.append(int(raw_peer_id))
+	claim_last_passed_peer_id = int(state.get("claim_last_passed_peer_id", -1))
 	claim_status_rows.clear()
 	for raw_row in state.get("claim_status_rows", []):
 		if typeof(raw_row) != TYPE_DICTIONARY:
