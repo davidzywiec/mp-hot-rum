@@ -137,6 +137,7 @@ func _ready() -> void:
 	Game_State_Manager.private_hand_updated.connect(_on_private_hand_updated)
 	Game_State_Manager.private_put_down_buffer_updated.connect(_on_private_put_down_buffer_updated)
 	Game_State_Manager.pile_claimed_notification.connect(_on_pile_claimed_notification)
+	Game_State_Manager.claim_passed_notification.connect(_on_claim_passed_notification)
 	Game_State_Manager.put_down_error.connect(_on_put_down_error)
 	set_process(true)
 	if multiplayer.is_server() or OS.has_feature("server"):
@@ -1637,6 +1638,9 @@ func _mark_claim_window_claimed(claimant_peer_id: int) -> void:
 	_last_claim_window_rows = updated_rows.duplicate(true)
 	_claim_window_table_signature = ""
 	_update_claim_window_table()
+
+func _on_claim_passed_notification(peer_id: int) -> void:
+	_mark_claim_window_passed(peer_id)
 
 func _mark_claim_window_passed(passed_peer_id: int) -> void:
 	var rows: Array = _claim_window_rows_for_display().duplicate(true)

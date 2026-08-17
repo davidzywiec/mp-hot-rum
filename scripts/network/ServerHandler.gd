@@ -779,6 +779,9 @@ func _apply_turn_flow_result(result: Dictionary) -> bool:
 			claim_notification.get("card_data", {}),
 			bool(claim_notification.get("extra_card_drawn", false))
 		)
+	var claim_passed_peer_id: int = int(result.get("claim_passed_peer_id", -1))
+	if claim_passed_peer_id > 0:
+		Game_State_Manager.send_claim_passed_notification(claim_passed_peer_id)
 
 	var round_update: Dictionary = result.get("round_update", {})
 	if not round_update.is_empty():

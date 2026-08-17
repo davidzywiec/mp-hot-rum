@@ -10,6 +10,7 @@ signal game_state_updated(state: Dictionary)
 signal private_hand_updated(cards: Array)
 signal private_put_down_buffer_updated(cards: Array)
 signal pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool)
+signal claim_passed_notification(peer_id: int)
 signal put_down_error(message: String)
 
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
@@ -200,6 +201,14 @@ func receive_pile_claimed_notification(claimant_peer_id: int, card_data: Diction
 func send_pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool) -> void:
 	rpc("receive_pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
 	emit_signal("pile_claimed_notification", claimant_peer_id, card_data, extra_card_drawn)
+
+@rpc
+func receive_claim_passed_notification(peer_id: int) -> void:
+	emit_signal("claim_passed_notification", peer_id)
+
+func send_claim_passed_notification(peer_id: int) -> void:
+	rpc("receive_claim_passed_notification", peer_id)
+	emit_signal("claim_passed_notification", peer_id)
 
 @rpc
 func receive_put_down_error(message: String) -> void:

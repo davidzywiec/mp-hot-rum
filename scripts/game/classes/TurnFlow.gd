@@ -226,6 +226,7 @@ func _pass_claim(peer_id: int) -> Dictionary:
 	claim_passed_peer_ids[peer_id] = true
 	_refresh_claim_status_rows()
 	var result: Dictionary = _accept()
+	result["claim_passed_peer_id"] = peer_id
 	_add_log(result, "Peer %s passed on the pile offer." % str(peer_id))
 	if _all_eligible_claim_players_passed():
 		_add_log(result, "All eligible players passed. Closing Claim Window early.")
