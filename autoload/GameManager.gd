@@ -35,6 +35,9 @@ var current_round_requirement_data: Dictionary = {}
 var private_put_down_buffer_data: Array = [] # client-only staged put-down cards for local player
 var score_sheet_data: Array = [] # Array[Dictionary] with per-round scores
 var latest_round_score_data: Dictionary = {}
+var round_summary_pending: bool = false
+var pending_round_summary_data: Dictionary = {}
+var round_summary_continue_peer_ids: Array = []
 var game_over: bool = false
 var winning_peer_ids: Array = []
 
@@ -337,13 +340,21 @@ func complete_current_round(finishing_peer_id: int) -> Dictionary:
 	if is_final_round:
 		game_over = true
 		winning_peer_ids = _calculate_winner_peer_ids()
+		round_summary_pending = false
+		pending_round_summary_data.clear()
+		round_summary_continue_peer_ids.clear()
 		clear_claim_window()
 		reset_turn_pickup_completed()
 		current_player_peer_id = -1
 	else:
 		game_over = false
 		winning_peer_ids.clear()
-		advance_to_next_round()
+		round_summary_pending = true
+		pending_round_summary_data = round_score.duplicate(true)
+		round_summary_continue_peer_ids.clear()
+		clear_claim_window()
+		reset_turn_pickup_completed()
+		current_player_peer_id = -1
 	return {
 		"completed_round": completed_round,
 		"max_rounds": max_rounds,
@@ -351,6 +362,19 @@ func complete_current_round(finishing_peer_id: int) -> Dictionary:
 		"game_over": game_over,
 		"winner_peer_ids": winning_peer_ids.duplicate()
 	}
+
+func advance_to_pending_next_round() -> bool:
+	if not _is_server_authority():
+		return false
+	if not round_summary_pending:
+		return false
+	if game_over:
+		return false
+	round_summary_pending = false
+	pending_round_summary_data.clear()
+	round_summary_continue_peer_ids.clear()
+	advance_to_next_round()
+	return true
 
 func force_end_game(finishing_peer_id: int = -1, apply_current_round_scoring: bool = true) -> Dictionary:
 	if not _is_server_authority():
@@ -368,6 +392,9 @@ func force_end_game(finishing_peer_id: int = -1, apply_current_round_scoring: bo
 		round_score = apply_round_scoring(finishing_peer_id)
 	game_over = true
 	winning_peer_ids = _calculate_winner_peer_ids()
+	round_summary_pending = false
+	pending_round_summary_data.clear()
+	round_summary_continue_peer_ids.clear()
 	clear_claim_window()
 	reset_turn_pickup_completed()
 	current_player_peer_id = -1
@@ -1000,6 +1027,19 @@ func apply_game_state(state: Dictionary) -> void:
 		var latest_round_score_dict: Dictionary = latest_round_score_raw
 		if not latest_round_score_dict.is_empty():
 			latest_round_score_data = latest_round_score_dict.duplicate(true)
+	round_summary_pending = bool(state.get("round_summary_pending", false))
+	pending_round_summary_data.clear()
+	var pending_round_summary_raw: Variant = state.get("pending_round_summary", {})
+	if typeof(pending_round_summary_raw) == TYPE_DICTIONARY:
+		var pending_round_summary_dict: Dictionary = pending_round_summary_raw
+		if not pending_round_summary_dict.is_empty():
+			pending_round_summary_data = pending_round_summary_dict.duplicate(true)
+	round_summary_continue_peer_ids.clear()
+	var round_summary_votes_raw: Variant = state.get("round_summary_continue_peer_ids", [])
+	if typeof(round_summary_votes_raw) == TYPE_ARRAY:
+		var round_summary_votes_array: Array = round_summary_votes_raw
+		for raw_peer_id in round_summary_votes_array:
+			round_summary_continue_peer_ids.append(int(raw_peer_id))
 	game_over = bool(state.get("game_over", false))
 	winning_peer_ids.clear()
 	var winner_ids_raw: Variant = state.get("winner_peer_ids", [])
@@ -1183,6 +1223,9 @@ func _calculate_winner_peer_ids() -> Array:
 func _reset_scoring_state() -> void:
 	score_sheet_data.clear()
 	latest_round_score_data.clear()
+	round_summary_pending = false
+	pending_round_summary_data.clear()
+	round_summary_continue_peer_ids.clear()
 	game_over = false
 	winning_peer_ids.clear()
 	for pid in players.keys():
