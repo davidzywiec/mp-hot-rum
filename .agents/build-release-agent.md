@@ -44,6 +44,16 @@ Read these before starting:
 - Document release steps.
 - Check whether generated artifacts should be committed or ignored.
 
+## Server Export Requirement
+
+Before Docker build/run/deployment verification, refresh the Linux server export with:
+
+```bash
+godot4 --headless --path . --export-release "Linux (server)" "Server Export/MP Hot Rum.x86_64"
+```
+
+Confirm the binary, `.pck`, file modes, Dockerfile, and compose file still line up.
+
 ## Verification Checklist
 
 - Confirm export paths match the intended client/server output directories.
