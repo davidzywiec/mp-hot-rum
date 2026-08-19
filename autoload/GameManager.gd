@@ -20,6 +20,8 @@ var claim_opened_by_peer_id: int = -1
 var claim_window_id: int = 0
 var claim_eligible_peer_ids: Array = []
 var claim_passed_peer_ids: Array = []
+var claim_status_rows: Array = []
+var claim_last_passed_peer_id: int = -1
 var turn_pickup_completed: bool = false
 var turn_discard_completed: bool = false
 var player_put_down_status: Dictionary = {} # key: peer_id, value: bool
@@ -42,6 +44,10 @@ const DEFAULT_CARD_POINT_RULES_PATH: String = "res://data/scoring/default_card_p
 const DEFAULT_PLAYER1_HAND_OVERRIDE_PATH: String = "res://data/debug/default_player1_hand_override.tres"
 const TURN_DEBUG: bool = true
 const CLIENT_STATE_BIND_MAX_ATTEMPTS: int = 120
+const CLAIM_STATUS_PASSED: String = "Passed"
+const CLAIM_STATUS_AUTO_PASSED: String = "Auto Passed"
+const CLAIM_STATUS_CLAIMED: String = "Claimed"
+const CLAIM_STATUS_PENDING: String = "Pending"
 
 var _client_state_bind_attempts: int = 0
 
@@ -89,6 +95,7 @@ func end_game_session() -> void:
 	player_hands.clear()
 	discard_pile.clear()
 	clear_claim_window()
+	clear_claim_status_rows()
 	current_player_index = 0
 	current_player_peer_id = -1
 	starting_player_index = 0
@@ -143,6 +150,7 @@ func initialize_discard_pile() -> void:
 		return
 	discard_pile.clear()
 	clear_claim_window()
+	clear_claim_status_rows()
 	if deck == null:
 		return
 	var top_card: Card = deck.draw_card()
@@ -406,6 +414,7 @@ func open_claim_window(opened_by_peer_id: int, duration_seconds: int) -> int:
 	claim_window_active = true
 	claim_opened_by_peer_id = opened_by_peer_id
 	claim_deadline_unix = int(Time.get_unix_time_from_system()) + maxi(1, duration_seconds)
+	claim_last_passed_peer_id = -1
 	return claim_window_id
 
 func clear_claim_window() -> void:
@@ -414,6 +423,33 @@ func clear_claim_window() -> void:
 	claim_opened_by_peer_id = -1
 	claim_eligible_peer_ids.clear()
 	claim_passed_peer_ids.clear()
+
+func clear_claim_status_rows() -> void:
+	claim_status_rows.clear()
+
+func update_claim_status_rows(eligible_peer_ids: Array, passed_peer_ids: Array, auto_passed_peer_id: int = -1, claimant_peer_id: int = -1, force_pass_pending: bool = false) -> void:
+	claim_status_rows.clear()
+	var sorted_peer_ids: Array = []
+	for raw_peer_id in players.keys():
+		sorted_peer_ids.append(int(raw_peer_id))
+	sorted_peer_ids.sort()
+	for raw_peer_id in sorted_peer_ids:
+		var peer_id: int = int(raw_peer_id)
+		var status: String = CLAIM_STATUS_PASSED
+		if eligible_peer_ids.has(peer_id):
+			if passed_peer_ids.has(peer_id) or force_pass_pending:
+				status = CLAIM_STATUS_PASSED
+			else:
+				status = CLAIM_STATUS_PENDING
+		if peer_id == auto_passed_peer_id:
+			status = CLAIM_STATUS_AUTO_PASSED
+		if peer_id == claimant_peer_id:
+			status = CLAIM_STATUS_CLAIMED
+		claim_status_rows.append({
+			"peer_id": peer_id,
+			"name": get_player_name_for_peer(peer_id),
+			"status": status
+		})
 
 func mark_turn_pickup_completed() -> void:
 	if not _is_server_authority():
@@ -886,6 +922,17 @@ func apply_game_state(state: Dictionary) -> void:
 	claim_passed_peer_ids.clear()
 	for raw_peer_id in state.get("claim_passed_peer_ids", []):
 		claim_passed_peer_ids.append(int(raw_peer_id))
+	claim_last_passed_peer_id = int(state.get("claim_last_passed_peer_id", -1))
+	claim_status_rows.clear()
+	for raw_row in state.get("claim_status_rows", []):
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = raw_row
+		claim_status_rows.append({
+			"peer_id": int(row.get("peer_id", -1)),
+			"name": str(row.get("name", "")),
+			"status": str(row.get("status", CLAIM_STATUS_PASSED))
+		})
 	turn_pickup_completed = bool(state.get("turn_pickup_completed", false))
 	turn_discard_completed = bool(state.get("turn_discard_completed", false))
 	player_put_down_status.clear()

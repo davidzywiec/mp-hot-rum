@@ -192,6 +192,7 @@ func _claim_pile(peer_id: int) -> Dictionary:
 		return failed_claim
 
 	var extra_card: Card = game_manager.draw_card_from_deck_for_peer(peer_id)
+	_refresh_claim_status_rows(peer_id)
 	game_manager.clear_claim_window()
 	_reset_claim_pass_tracking(-1)
 	var result: Dictionary = _accept()
@@ -223,10 +224,13 @@ func _pass_claim(peer_id: int) -> Dictionary:
 	if claim_passed_peer_ids.has(peer_id):
 		return _reject("Ignoring pass-pile request from %s: already passed this Claim Window." % str(peer_id))
 	claim_passed_peer_ids[peer_id] = true
+	game_manager.claim_last_passed_peer_id = peer_id
+	_refresh_claim_status_rows()
 	var result: Dictionary = _accept()
 	_add_log(result, "Peer %s passed on the pile offer." % str(peer_id))
 	if _all_eligible_claim_players_passed():
 		_add_log(result, "All eligible players passed. Closing Claim Window early.")
+		_refresh_claim_status_rows(-1, true)
 		game_manager.clear_claim_window()
 		_reset_claim_pass_tracking(-1)
 	result["public_state_changed"] = true
@@ -239,6 +243,7 @@ func _expire_claim(expected_claim_id: int) -> Dictionary:
 		return _reject("Ignoring Claim Window expiry: no active Claim Window.")
 	if game_manager.claim_window_id != expected_claim_id:
 		return _reject("Ignoring stale Claim Window expiry for %s." % str(expected_claim_id))
+	_refresh_claim_status_rows(-1, true)
 	game_manager.clear_claim_window()
 	_reset_claim_pass_tracking(-1)
 	var result: Dictionary = _accept()
@@ -289,9 +294,11 @@ func _start_claim_window(opened_by_peer_id: int, duration_seconds: int, result: 
 		claim_passed_peer_ids[last_discard_peer_id] = true
 		_add_log(result, "Peer %s is automatically passed for the Claim Window because they discarded the offered card." % str(last_discard_peer_id))
 	if _all_eligible_claim_players_passed():
+		_refresh_claim_status_rows(-1, true)
 		game_manager.clear_claim_window()
 		_reset_claim_pass_tracking(-1)
 		return false
+	_refresh_claim_status_rows()
 	result["claim_timer_claim_id"] = claim_id
 	return true
 
@@ -322,6 +329,17 @@ func _all_eligible_claim_players_passed() -> bool:
 		if not claim_passed_peer_ids.has(peer_id):
 			return false
 	return true
+
+func _refresh_claim_status_rows(claimant_peer_id: int = -1, force_pass_pending: bool = false) -> void:
+	if game_manager == null:
+		return
+	game_manager.update_claim_status_rows(
+		_eligible_claim_peer_ids(),
+		claim_passed_peer_ids.keys(),
+		last_discard_peer_id,
+		claimant_peer_id,
+		force_pass_pending
+	)
 
 func _reset_claim_pass_tracking(window_id: int) -> void:
 	claim_pass_window_id = window_id
