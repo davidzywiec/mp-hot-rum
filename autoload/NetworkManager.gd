@@ -69,6 +69,12 @@ func register_end_turn() -> void:
 		handler.register_end_turn(sender_peer_id)
 
 @rpc("any_peer")
+func register_next_round() -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		handler.register_next_round(sender_peer_id)
+
+@rpc("any_peer")
 func register_draw_from_deck() -> void:
 	if handler is ServerHandler:
 		var sender_peer_id: int = multiplayer.get_remote_sender_id()

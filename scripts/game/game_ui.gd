@@ -46,6 +46,13 @@ var game_over_status_label: Label = null
 var game_over_scores_text: RichTextLabel = null
 var play_again_game_button: Button = null
 var leave_game_button: Button = null
+var round_summary_overlay: ColorRect = null
+var round_summary_title_label: Label = null
+var round_summary_leader_label: Label = null
+var round_summary_leader_total_label: Label = null
+var round_summary_rows: VBoxContainer = null
+var round_summary_status_label: Label = null
+var next_round_button: Button = null
 
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/game/CardView.tscn")
 const BASE_HAND_SPACING: float = 4.0
@@ -77,11 +84,13 @@ var _round_rules_popup: AcceptDialog = null
 var _round_rules_popup_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
 var _play_again_vote_peer_ids: Array[int] = []
+var _next_round_vote_peer_ids: Array[int] = []
 var _turn_pickup_overlay_minimized: bool = false
 var _button_style_restore: StyleBoxFlat = null
 var _claim_window_table_signature: String = ""
 var _claim_window_minimized: bool = false
 var _last_claim_window_rows: Array = []
+var _round_summary_signature: String = ""
 
 func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
@@ -120,6 +129,8 @@ func _ready() -> void:
 		play_again_game_button.pressed.connect(_on_play_again_game_pressed)
 	if leave_game_button != null:
 		leave_game_button.pressed.connect(_on_leave_game_pressed)
+	if next_round_button != null:
+		next_round_button.pressed.connect(_on_next_round_pressed)
 	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
@@ -127,6 +138,7 @@ func _ready() -> void:
 	_refresh_meld_board_if_open()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_round_summary_overlay()
 	_update_game_over_overlay()
 	_update_turn_pickup_overlay()
 	_update_debug_controls_visibility()
@@ -149,8 +161,11 @@ func _on_game_state_updated(state: Dictionary) -> void:
 	if claim_last_passed_peer_id > 0:
 		_mark_claim_window_passed(claim_last_passed_peer_id)
 	_update_play_again_votes_from_state(state)
+	_update_next_round_votes_from_state(state)
 	if not GameManager.claim_window_active:
 		_local_claim_offer_passed = false
+	if not GameManager.round_summary_pending:
+		_next_round_vote_peer_ids.clear()
 	if not GameManager.game_over:
 		_play_again_vote_peer_ids.clear()
 	_debug_turn_state("game_state_updated_pre")
@@ -160,6 +175,7 @@ func _on_game_state_updated(state: Dictionary) -> void:
 	_update_claim_window_table()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_round_summary_overlay()
 	_update_game_over_overlay()
 	_update_turn_pickup_overlay()
 	_update_staged_put_down_ui()
@@ -170,6 +186,8 @@ func _on_game_state_updated(state: Dictionary) -> void:
 func pull_round_ui() -> void:
 	var round: int = GameManager.round_number
 	var current_player_name: String = GameManager.get_player_name(GameManager.current_player_index)
+	if GameManager.round_summary_pending:
+		current_player_name = "End of Round"
 	if GameManager.game_over:
 		current_player_name = _game_over_status_text()
 	update_round_ui(round, current_player_name)
@@ -188,6 +206,7 @@ func update_round_ui(round: int, current_player_name: String) -> void:
 	_update_claim_status_label()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_update_round_summary_overlay()
 	_update_game_over_overlay()
 	_update_turn_pickup_overlay()
 	_refresh_score_sheet_if_open()
@@ -452,6 +471,13 @@ func _resolve_hand_nodes() -> void:
 	game_over_scores_text = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/ScoresText") as RichTextLabel
 	play_again_game_button = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons/PlayAgainButton") as Button
 	leave_game_button = get_node_or_null("RoundDataContainer/GameOverOverlay/Center/Panel/VB/Buttons/LeaveGameButton") as Button
+	round_summary_overlay = get_node_or_null("RoundDataContainer/RoundSummaryOverlay") as ColorRect
+	round_summary_title_label = get_node_or_null("RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/TitleLabel") as Label
+	round_summary_leader_label = get_node_or_null("RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/LeaderBar/LeaderLabel") as Label
+	round_summary_leader_total_label = get_node_or_null("RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/LeaderBar/LeaderTotalLabel") as Label
+	round_summary_rows = get_node_or_null("RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/Rows") as VBoxContainer
+	round_summary_status_label = get_node_or_null("RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/StatusLabel") as Label
+	next_round_button = get_node_or_null("RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/NextRoundButton") as Button
 
 	hand_scroll = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll") as ScrollContainer
 	hand_container = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/HandScroll/HandContainer") as HBoxContainer
@@ -761,6 +787,21 @@ func _local_has_play_again_vote() -> bool:
 		return false
 	return _play_again_vote_peer_ids.has(local_peer_id)
 
+func _update_next_round_votes_from_state(state: Dictionary) -> void:
+	_next_round_vote_peer_ids.clear()
+	var raw_votes: Variant = state.get("round_summary_continue_peer_ids", [])
+	if typeof(raw_votes) != TYPE_ARRAY:
+		return
+	var raw_votes_array: Array = raw_votes
+	for raw_peer_id in raw_votes_array:
+		_next_round_vote_peer_ids.append(int(raw_peer_id))
+
+func _local_has_next_round_vote() -> bool:
+	var local_peer_id: int = multiplayer.get_unique_id()
+	if local_peer_id <= 0:
+		return false
+	return _next_round_vote_peer_ids.has(local_peer_id)
+
 func _update_game_over_overlay() -> void:
 	if game_over_overlay == null:
 		return
@@ -793,6 +834,122 @@ func _update_game_over_overlay() -> void:
 		else:
 			game_over_status_label.text = "Press Play Again when you are ready. (%d/%d ready)" % [vote_count, total_players]
 
+func _update_round_summary_overlay() -> void:
+	if round_summary_overlay == null or round_summary_rows == null:
+		return
+	var should_show: bool = GameManager.round_summary_pending and not GameManager.game_over
+	round_summary_overlay.visible = should_show
+	if not should_show:
+		_round_summary_signature = ""
+		if next_round_button != null:
+			next_round_button.disabled = false
+		return
+
+	var summary: Dictionary = GameManager.pending_round_summary_data
+	if summary.is_empty():
+		summary = GameManager.get_latest_round_score_data()
+	var completed_round: int = int(summary.get("round", GameManager.round_number))
+	if round_summary_title_label != null:
+		round_summary_title_label.text = "End of Round - Round %d" % completed_round
+	var total_players: int = int(GameManager.players.size())
+	var vote_count: int = int(_next_round_vote_peer_ids.size())
+	var local_voted: bool = _local_has_next_round_vote()
+	if round_summary_status_label != null:
+		if local_voted:
+			round_summary_status_label.text = "Waiting for other players... (%d/%d ready)" % [vote_count, total_players]
+		else:
+			round_summary_status_label.text = "Ready for next round: %d/%d" % [vote_count, total_players]
+	if next_round_button != null:
+		next_round_button.disabled = local_voted or total_players <= 0
+
+	var rows: Array = _sorted_round_summary_rows(summary)
+	_update_round_summary_leader(rows)
+	var next_signature: String = _round_summary_signature_for_rows(completed_round, rows, multiplayer.get_unique_id(), vote_count, local_voted)
+	if next_signature == _round_summary_signature:
+		return
+	_round_summary_signature = next_signature
+	for child in round_summary_rows.get_children():
+		child.queue_free()
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		round_summary_rows.add_child(_build_round_summary_row(raw_row as Dictionary, multiplayer.get_unique_id()))
+
+func _sorted_round_summary_rows(summary: Dictionary) -> Array:
+	var rows: Array = []
+	var rows_raw: Variant = summary.get("rows", [])
+	if typeof(rows_raw) == TYPE_ARRAY:
+		var rows_array: Array = rows_raw
+		for raw_row in rows_array:
+			if typeof(raw_row) == TYPE_DICTIONARY:
+				rows.append((raw_row as Dictionary).duplicate(true))
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var total_a: int = int(a.get("total_points", 0))
+		var total_b: int = int(b.get("total_points", 0))
+		if total_a == total_b:
+			return str(a.get("name", "")) < str(b.get("name", ""))
+		return total_a < total_b
+	)
+	return rows
+
+func _update_round_summary_leader(rows: Array) -> void:
+	if rows.is_empty():
+		if round_summary_leader_label != null:
+			round_summary_leader_label.text = "Round Leader -"
+		if round_summary_leader_total_label != null:
+			round_summary_leader_total_label.text = "0 pts total"
+		return
+	var leader: Dictionary = rows[0]
+	if round_summary_leader_label != null:
+		round_summary_leader_label.text = "Round Leader - %s" % str(leader.get("name", "Unknown"))
+	if round_summary_leader_total_label != null:
+		round_summary_leader_total_label.text = "%d pts total" % int(leader.get("total_points", 0))
+
+func _round_summary_signature_for_rows(round_number: int, rows: Array, highlighted_peer_id: int, vote_count: int, local_voted: bool) -> String:
+	var parts: Array[String] = [str(round_number), str(highlighted_peer_id), str(vote_count), str(local_voted)]
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = raw_row
+		parts.append("%s:%s:%s:%s" % [
+			str(row.get("peer_id", "")),
+			str(row.get("name", "")),
+			str(row.get("round_points", "")),
+			str(row.get("total_points", ""))
+		])
+	return "|".join(parts)
+
+func _build_round_summary_row(row_data: Dictionary, highlighted_peer_id: int) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var peer_id: int = int(row_data.get("peer_id", -1))
+	var name_label: RichTextLabel = RichTextLabel.new()
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.fit_content = true
+	name_label.scroll_active = false
+	name_label.bbcode_enabled = true
+	var player_name: String = _escape_bbcode(str(row_data.get("name", "Unknown")))
+	if peer_id == highlighted_peer_id:
+		name_label.parse_bbcode("[b]%s[/b]" % player_name)
+	else:
+		name_label.parse_bbcode(player_name)
+	MDTheme.apply_rich_text_label(name_label)
+	row.add_child(name_label)
+	row.add_child(_build_round_summary_number_label(int(row_data.get("round_points", 0)), 130))
+	row.add_child(_build_round_summary_number_label(int(row_data.get("total_points", 0)), 110))
+	return row
+
+func _build_round_summary_number_label(value: int, width: int) -> Label:
+	var label: Label = Label.new()
+	label.custom_minimum_size = Vector2(width, 0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.text = str(value)
+	_style_claim_table_label(label, MorningDigestTheme.TEXT_PRIMARY)
+	return label
+
+func _escape_bbcode(text: String) -> String:
+	return text.replace("[", "\\[").replace("]", "\\]")
+
 func _on_end_turn_pressed() -> void:
 	_debug_turn_state("end_turn_pressed_before")
 	if not _can_local_end_turn():
@@ -821,35 +978,39 @@ func _update_end_turn_button_state() -> void:
 
 func _update_action_buttons_state() -> void:
 	_prune_selected_cards()
+	var round_interactions_blocked: bool = _round_interactions_blocked()
 	var turn_discard_completed: bool = GameManager.turn_discard_completed
 	var can_put_down: bool = _can_local_put_down()
 	var selected_count: int = _selected_cards.size()
 
 	if pass_pile_button != null:
-		pass_pile_button.visible = _should_show_local_claim_window()
-		pass_pile_button.disabled = not _can_local_pass_claim_offer()
+		pass_pile_button.visible = (not round_interactions_blocked) and _should_show_local_claim_window()
+		pass_pile_button.disabled = round_interactions_blocked or not _can_local_pass_claim_offer()
 	if claim_pile_button != null:
-		claim_pile_button.visible = _should_show_local_claim_window()
-		claim_pile_button.disabled = turn_discard_completed or not _can_local_claim_pile()
+		claim_pile_button.visible = (not round_interactions_blocked) and _should_show_local_claim_window()
+		claim_pile_button.disabled = round_interactions_blocked or turn_discard_completed or not _can_local_claim_pile()
 	if put_down_button != null:
-		put_down_button.disabled = not (can_put_down and selected_count > 0)
+		put_down_button.disabled = round_interactions_blocked or not (can_put_down and selected_count > 0)
 	if discard_selected_button != null:
-		discard_selected_button.disabled = not (_can_local_discard_card() and selected_count == 1)
+		discard_selected_button.disabled = round_interactions_blocked or not (_can_local_discard_card() and selected_count == 1)
 	if clear_selection_button != null:
 		clear_selection_button.disabled = selected_count <= 0
 	if debug_end_game_button != null:
-		debug_end_game_button.disabled = GameManager.game_over
+		debug_end_game_button.disabled = round_interactions_blocked
 	_update_turn_pickup_overlay()
 
+func _round_interactions_blocked() -> bool:
+	return GameManager.game_over or GameManager.round_summary_pending
+
 func _can_local_end_turn() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if not _is_local_players_turn():
 		return false
 	return GameManager.turn_discard_completed
 
 func _can_local_put_down() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if not _is_local_players_turn():
 		return false
@@ -863,7 +1024,7 @@ func _can_local_put_down() -> bool:
 	return not GameManager.has_player_put_down(local_peer_id)
 
 func _can_local_add_to_meld_state() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if not _is_local_players_turn():
 		return false
@@ -880,7 +1041,7 @@ func _can_local_select_cards() -> bool:
 	return _can_local_put_down() or _can_local_add_to_meld_state()
 
 func _can_local_discard_card() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if not _is_local_players_turn():
 		return false
@@ -891,7 +1052,7 @@ func _can_local_discard_card() -> bool:
 	return not GameManager.turn_discard_completed
 
 func _is_local_players_turn() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	var local_peer_id: int = multiplayer.get_unique_id()
 	if local_peer_id <= 0:
@@ -900,7 +1061,7 @@ func _is_local_players_turn() -> bool:
 	return current_turn_peer_id != -1 and current_turn_peer_id == local_peer_id
 
 func _can_local_claim_pile() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if _local_claim_offer_passed:
 		return false
@@ -909,7 +1070,7 @@ func _can_local_claim_pile() -> bool:
 	return _is_local_peer_eligible_for_claim_offer()
 
 func _can_local_pass_claim_offer() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if _local_claim_offer_passed:
 		return false
@@ -931,7 +1092,7 @@ func _should_show_local_claim_window() -> bool:
 	return _can_local_claim_pile() or _can_local_pass_claim_offer()
 
 func _should_show_turn_pickup_overlay() -> bool:
-	if GameManager.game_over:
+	if _round_interactions_blocked():
 		return false
 	if GameManager.claim_window_active:
 		return false
@@ -1162,6 +1323,24 @@ func _on_play_again_game_pressed() -> void:
 		if multiplayer.multiplayer_peer != null:
 			Network_Manager.rpc_id(1, "register_play_again", true)
 	_update_game_over_overlay()
+
+func _on_next_round_pressed() -> void:
+	if not GameManager.round_summary_pending:
+		_update_round_summary_overlay()
+		return
+	if _local_has_next_round_vote():
+		_update_round_summary_overlay()
+		return
+	if next_round_button != null:
+		next_round_button.disabled = true
+	if multiplayer.is_server() or OS.has_feature("server"):
+		if Network_Manager.handler is ServerHandler:
+			var local_peer_id: int = multiplayer.get_unique_id()
+			(Network_Manager.handler as ServerHandler).register_next_round(local_peer_id)
+	else:
+		if multiplayer.multiplayer_peer != null:
+			Network_Manager.rpc_id(1, "register_next_round")
+	_update_round_summary_overlay()
 
 func _on_leave_game_pressed() -> void:
 	_disconnect_and_return_to_menu()
@@ -1445,6 +1624,10 @@ func _update_claim_status_label() -> void:
 
 func _update_claim_window_table() -> void:
 	if claim_window_panel == null or claim_window_rows == null:
+		return
+	if GameManager.round_summary_pending or GameManager.game_over:
+		claim_window_panel.visible = false
+		_claim_window_table_signature = ""
 		return
 	var rows: Array = _claim_window_rows_for_display()
 	var should_show: bool = GameManager.claim_window_active or not rows.is_empty()

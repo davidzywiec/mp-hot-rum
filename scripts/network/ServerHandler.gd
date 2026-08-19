@@ -36,6 +36,7 @@ var game_manager: Node = null
 var turn_flow: RefCounted = null
 var play_again_votes: Dictionary = {} # key: peer_id, value: true
 var play_again_restart_pending: bool = false
+var next_round_votes: Dictionary = {} # key: peer_id, value: true
 
 # TODO: point this at your actual game scene when its added
 const GAME_SCENE_PATH: String = "res://scenes/game/MainGame.tscn"
@@ -133,6 +134,35 @@ func register_play_again_vote(peer_id: int, wants_play_again: bool = true) -> vo
 	if _all_connected_players_voted_play_again():
 		_schedule_play_again_restart_validation()
 		return
+	_broadcast_game_state()
+
+func register_next_round(peer_id: int) -> void:
+	if not _ensure_game_manager_bound():
+		return
+	if not players.has(peer_id):
+		_log_err("Ignoring next-round request from unknown peer %s." % str(peer_id))
+		return
+	if not game_manager.round_summary_pending:
+		_log("Ignoring next-round request from %s: no round summary is pending." % str(peer_id))
+		return
+	next_round_votes[peer_id] = true
+	game_manager.round_summary_continue_peer_ids = _next_round_vote_peer_ids()
+	if not _all_connected_players_voted_next_round():
+		_log("Peer %s is ready for the next round. Waiting for other players." % str(peer_id))
+		_broadcast_game_state()
+		return
+	if not game_manager.advance_to_pending_next_round():
+		_log_err("Failed to advance pending round after request from %s." % str(peer_id))
+		return
+	next_round_votes.clear()
+	if turn_flow != null:
+		turn_flow.reset_claim_tracking()
+	_log("Peer %s advanced from round summary to round %d." % [str(peer_id), int(game_manager.round_number)])
+	_send_private_hands()
+	Game_State_Manager.send_round_update(
+		game_manager.round_number,
+		game_manager.get_player_name(game_manager.current_player_index)
+	)
 	_broadcast_game_state()
 
 func register_debug_end_game(peer_id: int) -> void:
@@ -374,6 +404,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	players.erase(peer_id)
 	ready_players.erase(peer_id)
 	play_again_votes.erase(peer_id)
+	next_round_votes.erase(peer_id)
 	if game_manager != null:
 		game_manager.load_players(players)
 	if players.is_empty():
@@ -385,6 +416,11 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if game_manager != null and game_manager.game_over and _all_connected_players_voted_play_again():
 		_schedule_play_again_restart_validation()
 		return
+	if game_manager != null and game_manager.round_summary_pending:
+		game_manager.round_summary_continue_peer_ids = _next_round_vote_peer_ids()
+		if _all_connected_players_voted_next_round():
+			register_next_round(_current_host_peer_id())
+			return
 	_broadcast_player_state()
 	_broadcast_game_state()
 	_broadcast_host_if_changed()
@@ -469,6 +505,9 @@ func _broadcast_game_state() -> void:
 		"round_requirement": game_manager.serialize_current_round_requirement(),
 		"score_sheet": game_manager.get_score_sheet_data(),
 		"latest_round_score": game_manager.get_latest_round_score_data(),
+		"round_summary_pending": game_manager.round_summary_pending,
+		"pending_round_summary": game_manager.pending_round_summary_data.duplicate(true),
+		"round_summary_continue_peer_ids": _next_round_vote_peer_ids(),
 		"game_over": game_manager.game_over,
 		"winner_peer_ids": game_manager.get_winning_peer_ids(),
 		"play_again_peer_ids": _play_again_vote_peer_ids()
@@ -522,6 +561,7 @@ func start_game() -> void:
 		_log_err("GameManager not initialized; cannot start game.")
 		return
 	play_again_votes.clear()
+	next_round_votes.clear()
 	_log("Server loading players into game.")
 	game_manager.load_players(players)
 	_log("Server starting game with default ruleset.")
@@ -538,21 +578,26 @@ func _send_private_hands() -> void:
 	for pid in players.keys():
 		var hand_data: Array = game_manager.serialize_hand_for_peer(pid)
 		_log("Sending private hand to peer %s with %d cards." % [str(pid), hand_data.size()])
-		Game_State_Manager.rpc_id(pid, "receive_private_hand", hand_data)
-		_send_private_put_down_buffer_to_peer(pid)
+		_send_private_hand_to_peer(int(pid))
 
 func _send_private_hand_to_peer(peer_id: int) -> void:
 	if game_manager == null:
 		return
 	var hand_data: Array = game_manager.serialize_hand_for_peer(peer_id)
-	Game_State_Manager.rpc_id(peer_id, "receive_private_hand", hand_data)
+	if multiplayer.get_unique_id() == peer_id:
+		Game_State_Manager.receive_private_hand(hand_data)
+	elif multiplayer.multiplayer_peer != null and multiplayer.get_peers().has(peer_id):
+		Game_State_Manager.rpc_id(peer_id, "receive_private_hand", hand_data)
 	_send_private_put_down_buffer_to_peer(peer_id)
 
 func _send_private_put_down_buffer_to_peer(peer_id: int) -> void:
 	if game_manager == null:
 		return
 	var staged_cards_data: Array = game_manager.get_put_down_buffer_for_peer(peer_id)
-	Game_State_Manager.send_private_put_down_buffer(peer_id, staged_cards_data)
+	if multiplayer.get_unique_id() == peer_id:
+		Game_State_Manager.receive_private_put_down_buffer(staged_cards_data)
+	elif multiplayer.multiplayer_peer != null and multiplayer.get_peers().has(peer_id):
+		Game_State_Manager.send_private_put_down_buffer(peer_id, staged_cards_data)
 
 func _reject_put_down(peer_id: int, reason: String) -> void:
 	_log("Put-down rejected for %s: %s" % [str(peer_id), reason])
@@ -562,6 +607,7 @@ func _handle_round_finished(finishing_peer_id: int, finish_message: String) -> v
 	if game_manager == null:
 		return
 	_log(finish_message)
+	next_round_votes.clear()
 	var completion: Dictionary = game_manager.complete_current_round(finishing_peer_id)
 	if turn_flow != null:
 		turn_flow.reset_claim_tracking()
@@ -579,12 +625,28 @@ func _handle_round_finished(finishing_peer_id: int, finish_message: String) -> v
 		Game_State_Manager.send_round_update(game_manager.round_number, "Game Over: %s" % winner_names)
 		_broadcast_game_state()
 		return
-	_send_private_hands()
 	Game_State_Manager.send_round_update(
-		game_manager.round_number,
-		game_manager.get_player_name(game_manager.current_player_index)
+		completed_round,
+		"End of Round"
 	)
 	_broadcast_game_state()
+
+func _next_round_vote_peer_ids() -> Array:
+	var vote_ids: Array = []
+	for raw_peer_id in next_round_votes.keys():
+		var peer_id: int = int(raw_peer_id)
+		if players.has(peer_id):
+			vote_ids.append(peer_id)
+	vote_ids.sort()
+	return vote_ids
+
+func _all_connected_players_voted_next_round() -> bool:
+	if players.is_empty():
+		return false
+	for raw_peer_id in players.keys():
+		if not next_round_votes.has(int(raw_peer_id)):
+			return false
+	return true
 
 func _format_round_score_log(round_score: Dictionary, fallback_round: int) -> String:
 	if round_score.is_empty():
@@ -645,6 +707,7 @@ func _restart_game_from_play_again_votes() -> void:
 		return
 	_log("All connected players voted play again. Restarting game.")
 	play_again_votes.clear()
+	next_round_votes.clear()
 	ready_players.clear()
 	for raw_peer_id in players.keys():
 		var peer_id: int = int(raw_peer_id)
@@ -657,6 +720,7 @@ func _end_game_session(reason: String) -> void:
 	_log("Ending game session: %s" % reason)
 	play_again_restart_pending = false
 	play_again_votes.clear()
+	next_round_votes.clear()
 	ready_players.clear()
 	if turn_flow != null:
 		turn_flow.reset_claim_tracking()
@@ -667,6 +731,7 @@ func _return_to_lobby_with_connected_players(reason: String) -> void:
 	_log("Returning to start screen: %s" % reason)
 	play_again_restart_pending = false
 	play_again_votes.clear()
+	next_round_votes.clear()
 	ready_players.clear()
 	for raw_peer_id in players.keys():
 		var peer_id: int = int(raw_peer_id)

@@ -464,6 +464,96 @@ scroll_active = false
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="RoundSummaryOverlay" type="ColorRect" parent="RoundDataContainer"]
+visible = false
+z_index = 110
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+color = Color(0.953, 0.949, 0.929, 0.88)
+
+[node name="Center" type="CenterContainer" parent="RoundDataContainer/RoundSummaryOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="RoundDataContainer/RoundSummaryOverlay/Center"]
+custom_minimum_size = Vector2(620, 360)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
+
+[node name="VB" type="VBoxContainer" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB"]
+layout_mode = 2
+text = "End of Round"
+horizontal_alignment = 1
+
+[node name="LeaderBar" type="HBoxContainer" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LeaderLabel" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/LeaderBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Round Leader -"
+
+[node name="LeaderTotalLabel" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/LeaderBar"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+text = "0 pts total"
+horizontal_alignment = 1
+
+[node name="TableHeader" type="HBoxContainer" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayerHeader" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/TableHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Player Name"
+
+[node name="RoundPointsHeader" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/TableHeader"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+text = "Points this round"
+horizontal_alignment = 1
+
+[node name="TotalPointsHeader" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB/TableHeader"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "Total Points"
+horizontal_alignment = 1
+
+[node name="Rows" type="VBoxContainer" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="StatusLabel" type="Label" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB"]
+layout_mode = 2
+text = "Ready for next round: 0/0"
+horizontal_alignment = 1
+
+[node name="NextRoundButton" type="Button" parent="RoundDataContainer/RoundSummaryOverlay/Center/Panel/Margin/VB"]
+layout_mode = 2
+text = "Next Round"
+
 [node name="GameOverOverlay" type="ColorRect" parent="RoundDataContainer"]
 visible = false
 layout_mode = 1
