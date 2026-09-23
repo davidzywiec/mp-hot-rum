@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/test/score_sheet_popup_test.gd" id="1_score_sheet_popup_test"]
+
+[node name="ScoreSheetPopupTest" type="Node"]
+script = ExtResource("1_score_sheet_popup_test")

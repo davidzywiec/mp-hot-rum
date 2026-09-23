@@ -78,7 +78,12 @@ var _meld_board_popup: AcceptDialog = null
 var _meld_board_scroll: ScrollContainer = null
 var _meld_board_list: VBoxContainer = null
 var _score_sheet_popup: AcceptDialog = null
-var _score_sheet_text: RichTextLabel = null
+var _score_sheet_title_label: Label = null
+var _score_sheet_leader_bar: HBoxContainer = null
+var _score_sheet_leader_label: Label = null
+var _score_sheet_leader_total_label: Label = null
+var _score_sheet_table_header: HBoxContainer = null
+var _score_sheet_rows: VBoxContainer = null
 var _round_rules_popup: AcceptDialog = null
 var _round_rules_popup_text: RichTextLabel = null
 var _local_claim_offer_passed: bool = false
@@ -884,17 +889,20 @@ func _sorted_round_summary_rows(summary: Dictionary) -> Array:
 	return rows
 
 func _update_round_summary_leader(rows: Array) -> void:
+	_set_round_leader(rows, round_summary_leader_label, round_summary_leader_total_label)
+
+func _set_round_leader(rows: Array, leader_label: Label, leader_total_label: Label) -> void:
 	if rows.is_empty():
-		if round_summary_leader_label != null:
-			round_summary_leader_label.text = "Round Leader -"
-		if round_summary_leader_total_label != null:
-			round_summary_leader_total_label.text = "0 pts total"
+		if leader_label != null:
+			leader_label.text = "Round Leader -"
+		if leader_total_label != null:
+			leader_total_label.text = "0 pts total"
 		return
 	var leader: Dictionary = rows[0]
-	if round_summary_leader_label != null:
-		round_summary_leader_label.text = "Round Leader - %s" % str(leader.get("name", "Unknown"))
-	if round_summary_leader_total_label != null:
-		round_summary_leader_total_label.text = "%d pts total" % int(leader.get("total_points", 0))
+	if leader_label != null:
+		leader_label.text = "Round Leader - %s" % str(leader.get("name", "Unknown"))
+	if leader_total_label != null:
+		leader_total_label.text = "%d pts total" % int(leader.get("total_points", 0))
 
 func _round_summary_signature_for_rows(round_number: int, rows: Array, highlighted_peer_id: int, vote_count: int, local_voted: bool) -> String:
 	var parts: Array[String] = [str(round_number), str(highlighted_peer_id), str(vote_count), str(local_voted)]
@@ -1368,19 +1376,65 @@ func _ensure_score_sheet_popup() -> void:
 	popup.title = "Score Sheet"
 	popup.exclusive = false
 	_style_popup(popup)
-	var score_text: RichTextLabel = RichTextLabel.new()
-	score_text.custom_minimum_size = Vector2(720, 360)
-	score_text.scroll_active = true
-	score_text.bbcode_enabled = false
-	score_text.fit_content = false
-	score_text.selection_enabled = true
-	score_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	MDTheme.apply_rich_text_label(score_text)
-	popup.add_child(score_text)
+	var content: VBoxContainer = VBoxContainer.new()
+	content.custom_minimum_size = Vector2(720, 360)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 10)
+	popup.add_child(content)
+
+	var title_label: Label = Label.new()
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+	content.add_child(title_label)
+
+	var leader_bar: HBoxContainer = HBoxContainer.new()
+	leader_bar.add_theme_constant_override("separation", 8)
+	content.add_child(leader_bar)
+	var leader_label: Label = Label.new()
+	leader_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	leader_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+	leader_bar.add_child(leader_label)
+	var leader_total_label: Label = Label.new()
+	leader_total_label.custom_minimum_size = Vector2(130, 0)
+	leader_total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	leader_total_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+	leader_bar.add_child(leader_total_label)
+
+	var table_header: HBoxContainer = HBoxContainer.new()
+	table_header.add_theme_constant_override("separation", 8)
+	content.add_child(table_header)
+	var player_header: Label = Label.new()
+	player_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_header.text = "Player Name"
+	player_header.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+	table_header.add_child(player_header)
+	var round_points_header: Label = Label.new()
+	round_points_header.custom_minimum_size = Vector2(130, 0)
+	round_points_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	round_points_header.text = "Points this round"
+	round_points_header.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+	table_header.add_child(round_points_header)
+	var total_points_header: Label = Label.new()
+	total_points_header.custom_minimum_size = Vector2(110, 0)
+	total_points_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	total_points_header.text = "Total Points"
+	total_points_header.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+	table_header.add_child(total_points_header)
+
+	var rows: VBoxContainer = VBoxContainer.new()
+	rows.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation", 4)
+	content.add_child(rows)
 	add_child(popup)
 	_apply_card_button_theme_to_tree(popup)
 	_score_sheet_popup = popup
-	_score_sheet_text = score_text
+	_score_sheet_title_label = title_label
+	_score_sheet_leader_bar = leader_bar
+	_score_sheet_leader_label = leader_label
+	_score_sheet_leader_total_label = leader_total_label
+	_score_sheet_table_header = table_header
+	_score_sheet_rows = rows
 
 func _ensure_round_rules_popup() -> void:
 	if _round_rules_popup != null:
@@ -1411,11 +1465,34 @@ func _refresh_round_rules_popup() -> void:
 	_round_rules_popup_text.scroll_to_line(0)
 
 func _refresh_score_sheet_popup() -> void:
-	if _score_sheet_text == null:
+	if _score_sheet_rows == null:
 		return
-	_score_sheet_text.clear()
-	_score_sheet_text.add_text(_build_score_sheet_text())
-	_score_sheet_text.scroll_to_line(0)
+	var summary: Dictionary = GameManager.get_latest_round_score_data()
+	var has_completed_round: bool = not summary.is_empty()
+	if _score_sheet_title_label != null:
+		if has_completed_round:
+			_score_sheet_title_label.text = "Score Sheet - Round %d" % int(summary.get("round", GameManager.round_number))
+		else:
+			_score_sheet_title_label.text = "Score Sheet"
+	if _score_sheet_leader_bar != null:
+		_score_sheet_leader_bar.visible = has_completed_round
+	if _score_sheet_table_header != null:
+		_score_sheet_table_header.visible = has_completed_round
+	for child in _score_sheet_rows.get_children():
+		child.queue_free()
+	if not has_completed_round:
+		var empty_label: Label = Label.new()
+		empty_label.text = "No completed Rounds yet."
+		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_label.add_theme_color_override("font_color", MDTheme.TEXT_PRIMARY)
+		_score_sheet_rows.add_child(empty_label)
+		return
+	var rows: Array = _sorted_round_summary_rows(summary)
+	_set_round_leader(rows, _score_sheet_leader_label, _score_sheet_leader_total_label)
+	for raw_row in rows:
+		if typeof(raw_row) != TYPE_DICTIONARY:
+			continue
+		_score_sheet_rows.add_child(_build_round_summary_row(raw_row as Dictionary, multiplayer.get_unique_id()))
 
 func _refresh_meld_board() -> void:
 	if _meld_board_list == null:
