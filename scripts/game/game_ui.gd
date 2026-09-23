@@ -7,7 +7,6 @@ var hand_scroll: ScrollContainer = null
 var hand_container: HBoxContainer = null
 var hand_title: Label = null
 var hand_count_label: Label = null
-var end_turn_button: Button = null
 var pass_pile_button: Button = null
 var claim_pile_button: Button = null
 var meld_board_button: Button = null
@@ -95,8 +94,6 @@ var _round_summary_signature: String = ""
 func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
 	_resolve_hand_nodes()
-	if end_turn_button != null:
-		end_turn_button.pressed.connect(_on_end_turn_pressed)
 	if pass_pile_button != null:
 		pass_pile_button.pressed.connect(_on_pass_pile_pressed)
 	if claim_pile_button != null:
@@ -131,7 +128,6 @@ func _ready() -> void:
 		leave_game_button.pressed.connect(_on_leave_game_pressed)
 	if next_round_button != null:
 		next_round_button.pressed.connect(_on_next_round_pressed)
-	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
 	_update_claim_window_table()
@@ -201,7 +197,6 @@ func update_round_ui(round: int, current_player_name: String) -> void:
 	
 	current_player_label.clear()
 	current_player_label.parse_bbcode("[color=#8C8C8E][font_size=12][b]CURRENT TURN[/b][/font_size][/color]\n[color=#2C2C2E][font_size=18][b]%s[/b][/font_size][/color]" % safe_player_name)
-	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
 	_update_pile_view()
@@ -252,7 +247,6 @@ func _render_local_hand() -> void:
 	hand_container.add_theme_constant_override("separation", int(HAND_CARD_SPACING))
 	if hand_scroll != null:
 		hand_scroll.scroll_horizontal = 0
-	_update_end_turn_button_state()
 	_update_action_buttons_state()
 	_update_claim_status_label()
 	_update_pile_view()
@@ -435,7 +429,6 @@ func _resolve_hand_nodes() -> void:
 
 	hand_title = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/Header/HandTitle") as Label
 	hand_count_label = get_node_or_null("RoundDataContainer/HandAreaPanel/ContentMargin/HandAreaVB/Header/HandCountLabel") as Label
-	end_turn_button = get_node_or_null("RoundDataContainer/BottomControlsBar/EndTurnButton") as Button
 	pass_pile_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/PassPileButton") as Button
 	claim_pile_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/ClaimPileButton") as Button
 	meld_board_button = get_node_or_null("RoundDataContainer/BottomControlsBar/ActionBar/MeldBoardButton") as Button
@@ -485,8 +478,6 @@ func _resolve_hand_nodes() -> void:
 	# Backward-compatible fallback if a scene still uses direct HandContainer.
 	if hand_title == null:
 		hand_title = get_node_or_null("RoundDataContainer/HandTitle") as Label
-	if end_turn_button == null:
-		end_turn_button = get_node_or_null("RoundDataContainer/EndTurnButton") as Button
 	if pass_pile_button == null:
 		pass_pile_button = get_node_or_null("RoundDataContainer/ActionBar/PassPileButton") as Button
 	if claim_pile_button == null:
@@ -950,32 +941,6 @@ func _build_round_summary_number_label(value: int, width: int) -> Label:
 func _escape_bbcode(text: String) -> String:
 	return text.replace("[", "\\[").replace("]", "\\]")
 
-func _on_end_turn_pressed() -> void:
-	_debug_turn_state("end_turn_pressed_before")
-	if not _can_local_end_turn():
-		_update_end_turn_button_state()
-		_debug_turn_state("end_turn_pressed_blocked_invalid_state")
-		return
-
-	if end_turn_button != null:
-		end_turn_button.disabled = true
-
-	if multiplayer.is_server() or OS.has_feature("server"):
-		if Network_Manager.handler is ServerHandler:
-			var local_peer_id: int = multiplayer.get_unique_id()
-			(Network_Manager.handler as ServerHandler).register_end_turn(local_peer_id)
-	else:
-		if multiplayer.multiplayer_peer != null:
-			Network_Manager.rpc_id(1, "register_end_turn")
-	_debug_turn_state("end_turn_pressed_sent")
-
-func _update_end_turn_button_state() -> void:
-	if end_turn_button == null:
-		return
-	# TODO: Replace this simple gate with full turn validation for melds (sets/runs) and go-out checks.
-	end_turn_button.disabled = not _can_local_end_turn()
-	_debug_turn_state("update_end_turn_button_state")
-
 func _update_action_buttons_state() -> void:
 	_prune_selected_cards()
 	var round_interactions_blocked: bool = _round_interactions_blocked()
@@ -1001,13 +966,6 @@ func _update_action_buttons_state() -> void:
 
 func _round_interactions_blocked() -> bool:
 	return GameManager.game_over or GameManager.round_summary_pending
-
-func _can_local_end_turn() -> bool:
-	if _round_interactions_blocked():
-		return false
-	if not _is_local_players_turn():
-		return false
-	return GameManager.turn_discard_completed
 
 func _can_local_put_down() -> bool:
 	if _round_interactions_blocked():
@@ -1616,8 +1574,6 @@ func _update_claim_status_label() -> void:
 				claim_status_label.text = "Select 1 card, then press Discard Sel."
 		elif _is_local_players_turn() and not GameManager.turn_pickup_completed:
 			claim_status_label.text = "Pick up a card to begin your turn."
-		elif _can_local_end_turn():
-			claim_status_label.text = "Discard complete. You can end your turn."
 		else:
 			claim_status_label.text = ""
 		return
@@ -1944,10 +1900,7 @@ func _debug_turn_state(context: String) -> void:
 	var turn_pickup_completed: bool = GameManager.turn_pickup_completed
 	var turn_discard_completed: bool = GameManager.turn_discard_completed
 	var has_put_down: bool = GameManager.has_player_put_down(local_peer_id)
-	var button_disabled_text: String = "n/a"
-	if end_turn_button != null:
-		button_disabled_text = str(end_turn_button.disabled)
-	print("[TURN_DEBUG][UI][%s] local_peer=%s current_turn_peer=%s current_idx=%d order_size=%d pickup_done=%s discard_done=%s put_down=%s button_disabled=%s server=%s" % [
+	print("[TURN_DEBUG][UI][%s] local_peer=%s current_turn_peer=%s current_idx=%d order_size=%d pickup_done=%s discard_done=%s put_down=%s server=%s" % [
 		context,
 		str(local_peer_id),
 		str(current_turn_peer_id),
@@ -1956,6 +1909,5 @@ func _debug_turn_state(context: String) -> void:
 		str(turn_pickup_completed),
 		str(turn_discard_completed),
 		str(has_put_down),
-		button_disabled_text,
 		str(multiplayer.is_server() or OS.has_feature("server"))
 	])

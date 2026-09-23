@@ -63,12 +63,6 @@ func register_hand_reorder(cards_data: Array) -> void:
 		handler.register_hand_reorder(sender_peer_id, cards_data)
 
 @rpc("any_peer")
-func register_end_turn() -> void:
-	if handler is ServerHandler:
-		var sender_peer_id: int = multiplayer.get_remote_sender_id()
-		handler.register_end_turn(sender_peer_id)
-
-@rpc("any_peer")
 func register_next_round() -> void:
 	if handler is ServerHandler:
 		var sender_peer_id: int = multiplayer.get_remote_sender_id()

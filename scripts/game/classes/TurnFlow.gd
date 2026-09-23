@@ -4,7 +4,6 @@ class_name TurnFlow
 const MOVE_DRAW_FROM_DECK: String = "draw_from_deck"
 const MOVE_TAKE_FROM_PILE: String = "take_from_pile"
 const MOVE_DISCARD_CARD: String = "discard_card"
-const MOVE_END_TURN: String = "end_turn"
 const MOVE_CLAIM_PILE: String = "claim_pile"
 const MOVE_PASS_CLAIM: String = "pass_claim"
 const MOVE_EXPIRE_CLAIM: String = "expire_claim"
@@ -30,8 +29,6 @@ func apply_move(peer_id: int, move: Dictionary) -> Dictionary:
 			return _take_from_pile(peer_id)
 		MOVE_DISCARD_CARD:
 			return _discard_card(peer_id, move)
-		MOVE_END_TURN:
-			return _end_turn(peer_id)
 		MOVE_CLAIM_PILE:
 			return _claim_pile(peer_id)
 		MOVE_PASS_CLAIM:
@@ -148,30 +145,15 @@ func _discard_card(peer_id: int, move: Dictionary) -> Dictionary:
 			"message": "Peer %s discarded their final card %s. Round is over." % [str(peer_id), str(discarded_card)]
 		}
 	else:
+		game_manager.advance_to_next_player()
+		result["round_update"] = {
+			"round": game_manager.round_number,
+			"current_player_name": game_manager.get_player_name(game_manager.current_player_index)
+		}
+		_add_log(result, "Peer %s discarded %s. Next player is %s." % [
+			str(peer_id), str(discarded_card), game_manager.get_player_name(game_manager.current_player_index)
+		])
 		result["public_state_changed"] = true
-	return result
-
-func _end_turn(peer_id: int) -> Dictionary:
-	var validation: Dictionary = _validate_current_turn_peer(peer_id)
-	if not bool(validation.get("ok", false)):
-		return validation
-	if not game_manager.turn_discard_completed:
-		return _reject("Ignoring end turn from peer %s: they must discard before ending their turn." % str(peer_id))
-	var result: Dictionary = _accept()
-	if not game_manager.has_player_put_down(peer_id):
-		if game_manager.get_put_down_buffer_size_for_peer(peer_id) > 0:
-			game_manager.reset_put_down_progress_for_peer(peer_id)
-			_add_private_put_down_peer(result, peer_id)
-			_add_log(result, "Cleared incomplete put-down slots for peer %s at end turn." % str(peer_id))
-	game_manager.advance_to_next_player()
-	result["round_update"] = {
-		"round": game_manager.round_number,
-		"current_player_name": game_manager.get_player_name(game_manager.current_player_index)
-	}
-	_add_log(result, "Turn ended by peer %s. Next player is %s." % [
-		str(peer_id), game_manager.get_player_name(game_manager.current_player_index)
-	])
-	result["public_state_changed"] = true
 	return result
 
 func _claim_pile(peer_id: int) -> Dictionary:

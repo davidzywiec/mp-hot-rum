@@ -264,10 +264,6 @@ visible = false
 layout_mode = 2
 text = "Resume Pickup"
 
-[node name="EndTurnButton" type="Button" parent="RoundDataContainer/BottomControlsBar"]
-layout_mode = 2
-text = "End Turn"
-
 [node name="TurnPickupOverlay" type="ColorRect" parent="RoundDataContainer"]
 visible = false
 z_index = 100
