@@ -184,21 +184,6 @@ func register_debug_end_game(peer_id: int) -> void:
 	Game_State_Manager.send_round_update(game_manager.round_number, "Game Over: %s" % winner_names)
 	_broadcast_game_state()
 
-func register_end_turn(peer_id: int) -> void:
-	if not _ensure_game_manager_bound():
-		return
-	if TURN_DEBUG:
-		_log("[TURN_DEBUG][SERVER][register_end_turn] sender=%s current_turn_peer=%s current_idx=%d order_size=%d" % [
-			str(peer_id),
-			str(game_manager.get_current_player_peer_id()),
-			int(game_manager.current_player_index),
-			int(game_manager.player_order.size())
-		])
-	var result: Dictionary = _ensure_turn_flow().apply_move(peer_id, {
-		"type": "end_turn"
-	})
-	_apply_turn_flow_result(result)
-
 func register_draw_from_deck(peer_id: int) -> void:
 	if not _ensure_game_manager_bound():
 		return

@@ -105,10 +105,6 @@ func _take_smoke_turn(peer_id: int) -> void:
 		return
 	var discard_payload: Dictionary = private_hand[0]
 	Network_Manager.rpc_id(1, "register_discard_card", discard_payload)
-	if not await _wait_until(func() -> bool: return bool(latest_state.get("turn_discard_completed", false)), timeout_seconds):
-		_fail("Timed out waiting for discard completion.")
-		return
-	Network_Manager.rpc_id(1, "register_end_turn")
 	took_turn = true
 
 func _on_connected() -> void:
