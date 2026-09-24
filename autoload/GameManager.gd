@@ -666,6 +666,8 @@ func commit_staged_put_down_groups_for_peer(peer_id: int) -> int:
 		meld_data["owner_peer_id"] = peer_id
 		next_meld_id += 1
 		owner_melds.append(meld_data)
+		for raw_card in cards_data:
+			public_card_history.append({"event": "meld_play", "card": raw_card, "peer_id": peer_id})
 		committed_count += 1
 	player_committed_melds[peer_id] = owner_melds
 	clear_put_down_group_buffer_for_peer(peer_id)
@@ -688,7 +690,7 @@ func get_committed_meld_by_id(meld_id: int) -> Dictionary:
 			return copy
 	return {}
 
-func add_card_to_committed_meld(meld_id: int, card_data: Dictionary) -> bool:
+func add_card_to_committed_meld(meld_id: int, card_data: Dictionary, actor_peer_id: int) -> bool:
 	if not _is_server_authority():
 		return false
 	if card_data.is_empty():
@@ -713,6 +715,7 @@ func add_card_to_committed_meld(meld_id: int, card_data: Dictionary) -> bool:
 			meld_data["cards_data"] = cards_data
 			melds[i] = meld_data
 			player_committed_melds[owner_key] = melds
+			public_card_history.append({"event": "meld_play", "card": card_data.duplicate(true), "peer_id": actor_peer_id})
 			return true
 	return false
 

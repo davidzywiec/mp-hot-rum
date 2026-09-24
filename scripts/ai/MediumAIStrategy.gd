@@ -127,16 +127,16 @@ func _weight(observation: Dictionary, name: String) -> float:
 func _opponent_interest(card: Dictionary, observation: Dictionary) -> float:
 	var history: Array = observation.get("public_card_history", [])
 	var own_peer_id: int = int(observation.get("peer_id", -1))
-	var highest: float = 0.0
 	for index in range(history.size() - 1, maxi(-1, history.size() - 21), -1):
 		var event: Dictionary = history[index]
-		if not ["claim", "take_discard"].has(str(event.get("event", ""))):
+		var event_type: String = str(event.get("event", ""))
+		if not ["claim", "take_discard", "discard"].has(event_type):
 			continue
 		if int(event.get("peer_id", -1)) == own_peer_id:
 			continue
 		var known_card: Dictionary = event.get("card", {})
 		if int(known_card.get("number", 0)) == int(card.get("number", -1)):
-			highest = maxf(highest, 4.0)
+			return -2.0 if event_type == "discard" else 4.0
 		elif int(known_card.get("suit", -1)) == int(card.get("suit", -2)) and absi(int(known_card.get("number", 0)) - int(card.get("number", 0))) <= 2:
-			highest = maxf(highest, 2.0)
-	return highest
+			return -1.0 if event_type == "discard" else 2.0
+	return 0.0

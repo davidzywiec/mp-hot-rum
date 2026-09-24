@@ -34,6 +34,15 @@ func _run() -> void:
 	var neutral_discard: Dictionary = strategy.choose_discard(observation, random)
 	if not _expect(int(neutral_discard.get("number", 0)) == 9, "disabling opponent-risk weight changes the decision"):
 		return
+	observation["own_hand"] = [
+		{"suit": 0, "number": 9, "point_value": 5},
+		{"suit": 1, "number": 4, "point_value": 5}
+	]
+	observation["heuristic_weights"] = {"opponent_risk": 3.0}
+	observation["public_card_history"] = [{"event": "discard", "peer_id": 11, "card": {"suit": 2, "number": 4, "point_value": 5}}]
+	var rejected_rank_discard: Dictionary = strategy.choose_discard(observation, random)
+	if not _expect(int(rejected_rank_discard.get("number", 0)) == 4, "Medium treats a recently discarded rank as safer to give back"):
+		return
 	print("[AI_MEDIUM_HISTORY_TEST][PASS]")
 	quit(0)
 

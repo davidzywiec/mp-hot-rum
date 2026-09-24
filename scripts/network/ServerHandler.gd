@@ -637,7 +637,7 @@ func register_add_to_meld(peer_id: int, meld_id: int, card_data: Dictionary) -> 
 	if removed_card == null:
 		_reject_put_down(peer_id, "Could not remove card from hand.")
 		return
-	var applied: bool = game_manager.add_card_to_committed_meld(meld_id, removed_card.to_dict())
+	var applied: bool = game_manager.add_card_to_committed_meld(meld_id, removed_card.to_dict(), peer_id)
 	if not applied:
 		_reject_put_down(peer_id, "Could not apply card to meld.")
 		return

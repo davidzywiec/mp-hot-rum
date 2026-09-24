@@ -83,7 +83,7 @@ func _unseen_cards(observation: Dictionary) -> Array:
 			for copy in range(deck_copies):
 				unseen.append({"suit": suit, "number": number, "point_value": int(point_values.get(number, 0))})
 	for raw_card in observation.get("own_hand", []):
-		_remove_visible_card(unseen, raw_card)
+		_remove_matching_card(unseen, raw_card)
 	var discard_stack: Array = []
 	var known_opponent_hands: Dictionary = {}
 	var own_peer_id: int = int(observation.get("peer_id", -1))
@@ -96,8 +96,11 @@ func _unseen_cards(observation: Dictionary) -> Array:
 				discard_stack.append(event_card)
 			"discard":
 				if known_opponent_hands.has(event_peer_id):
-					_erase_known_card(known_opponent_hands[event_peer_id], event_card)
+					_remove_matching_card(known_opponent_hands[event_peer_id], event_card)
 				discard_stack.append(event_card)
+			"meld_play":
+				if known_opponent_hands.has(event_peer_id):
+					_remove_matching_card(known_opponent_hands[event_peer_id], event_card)
 			"claim", "take_discard":
 				if not discard_stack.is_empty():
 					discard_stack.pop_back()
@@ -110,29 +113,19 @@ func _unseen_cards(observation: Dictionary) -> Array:
 		if not discard_top.is_empty():
 			discard_stack.append(discard_top)
 	for raw_card in discard_stack:
-		_remove_visible_card(unseen, raw_card)
+		_remove_matching_card(unseen, raw_card)
 	for raw_meld in observation.get("public_melds", []):
 		var meld: Dictionary = raw_meld
-		var owner_peer_id: int = int(meld.get("owner_peer_id", -1))
 		for raw_card in meld.get("cards_data", []):
-			if known_opponent_hands.has(owner_peer_id):
-				_erase_known_card(known_opponent_hands[owner_peer_id], raw_card)
-			_remove_visible_card(unseen, raw_card)
+			_remove_matching_card(unseen, raw_card)
 	for known_cards in known_opponent_hands.values():
 		for card in known_cards:
-			_remove_visible_card(unseen, card)
+			_remove_matching_card(unseen, card)
 	return unseen
 
-func _erase_known_card(cards: Array, visible: Dictionary) -> void:
+func _remove_matching_card(cards: Array, visible: Dictionary) -> void:
 	for index in range(cards.size()):
 		var card: Dictionary = cards[index]
 		if int(card.get("suit", -1)) == int(visible.get("suit", -2)) and int(card.get("number", 0)) == int(visible.get("number", -1)):
 			cards.remove_at(index)
-			return
-
-func _remove_visible_card(unseen: Array, visible: Dictionary) -> void:
-	for index in range(unseen.size()):
-		var card: Dictionary = unseen[index]
-		if int(card.get("suit", -1)) == int(visible.get("suit", -2)) and int(card.get("number", 0)) == int(visible.get("number", -1)):
-			unseen.remove_at(index)
 			return
