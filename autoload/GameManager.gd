@@ -18,6 +18,7 @@ var public_card_history: Array = []
 var claim_window_active: bool = false
 var claim_deadline_unix: int = 0
 var claim_opened_by_peer_id: int = -1
+var claim_offer_peer_id: int = -1
 var claim_window_id: int = 0
 var claim_eligible_peer_ids: Array = []
 var claim_passed_peer_ids: Array = []
@@ -52,6 +53,7 @@ const CLAIM_STATUS_PASSED: String = "Passed"
 const CLAIM_STATUS_AUTO_PASSED: String = "Auto Passed"
 const CLAIM_STATUS_CLAIMED: String = "Claimed"
 const CLAIM_STATUS_PENDING: String = "Pending"
+const CLAIM_STATUS_OFFERED: String = "Offered"
 
 var _client_state_bind_attempts: int = 0
 
@@ -470,6 +472,7 @@ func clear_claim_window() -> void:
 	claim_window_active = false
 	claim_deadline_unix = 0
 	claim_opened_by_peer_id = -1
+	claim_offer_peer_id = -1
 	claim_eligible_peer_ids.clear()
 	claim_passed_peer_ids.clear()
 
@@ -490,6 +493,8 @@ func update_claim_status_rows(eligible_peer_ids: Array, passed_peer_ids: Array, 
 				status = CLAIM_STATUS_PASSED
 			else:
 				status = CLAIM_STATUS_PENDING
+				if peer_id == claim_offer_peer_id:
+					status = CLAIM_STATUS_OFFERED
 		if peer_id == auto_passed_peer_id:
 			status = CLAIM_STATUS_AUTO_PASSED
 		if peer_id == claimant_peer_id:
@@ -972,6 +977,7 @@ func apply_game_state(state: Dictionary) -> void:
 	claim_window_id = int(state.get("claim_window_id", claim_window_id))
 	claim_deadline_unix = int(state.get("claim_deadline_unix", 0))
 	claim_opened_by_peer_id = int(state.get("claim_opened_by_peer_id", -1))
+	claim_offer_peer_id = int(state.get("claim_offer_peer_id", -1))
 	claim_eligible_peer_ids.clear()
 	for raw_peer_id in state.get("claim_eligible_peer_ids", []):
 		claim_eligible_peer_ids.append(int(raw_peer_id))

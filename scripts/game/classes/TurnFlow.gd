@@ -7,6 +7,7 @@ const MOVE_DISCARD_CARD: String = "discard_card"
 const MOVE_CLAIM_PILE: String = "claim_pile"
 const MOVE_PASS_CLAIM: String = "pass_claim"
 const MOVE_EXPIRE_CLAIM: String = "expire_claim"
+const MOVE_TIMEOUT_CLAIM_OFFER: String = "timeout_claim_offer"
 const MOVE_PUT_DOWN_GATE: String = "put_down_gate"
 const MOVE_ADD_TO_MELD_GATE: String = "add_to_meld_gate"
 
@@ -35,6 +36,8 @@ func apply_move(peer_id: int, move: Dictionary) -> Dictionary:
 			return _pass_claim(peer_id)
 		MOVE_EXPIRE_CLAIM:
 			return _expire_claim(int(move.get("claim_window_id", -1)))
+		MOVE_TIMEOUT_CLAIM_OFFER:
+			return _timeout_claim_offer(int(move.get("claim_window_id", -1)), int(move.get("claim_offer_peer_id", -1)))
 		MOVE_PUT_DOWN_GATE:
 			return _validate_turn_play_gate(peer_id, "put down")
 		MOVE_ADD_TO_MELD_GATE:
@@ -58,6 +61,14 @@ func passed_claim_peer_ids() -> Array:
 			passed.append(peer_id)
 	passed.sort()
 	return passed
+
+func claim_offer_timeout_seconds(now_unix: float) -> float:
+	if game_manager == null or not game_manager.claim_window_active:
+		return 0.0
+	var remaining_count: int = _remaining_claim_peer_ids().size()
+	if remaining_count <= 0:
+		return 0.0
+	return maxf(0.0, float(game_manager.claim_deadline_unix) - now_unix) / float(remaining_count)
 
 func _draw_from_deck(peer_id: int, move: Dictionary) -> Dictionary:
 	var validation: Dictionary = _validate_current_turn_peer(peer_id)
@@ -163,11 +174,12 @@ func _claim_pile(peer_id: int) -> Dictionary:
 		return _reject("Ignoring claim request from unknown peer %s." % str(peer_id))
 	if not game_manager.claim_window_active:
 		return _reject("Ignoring claim request from %s: no active claim window." % str(peer_id))
+	if game_manager.claim_deadline_unix > 0 and Time.get_unix_time_from_system() >= float(game_manager.claim_deadline_unix):
+		return _expire_claim(game_manager.claim_window_id)
 	if not _eligible_claim_peer_ids().has(peer_id):
 		return _reject("Ignoring claim request from %s: peer is not eligible for this Claim Window." % str(peer_id))
-	var now_unix: int = int(Time.get_unix_time_from_system())
-	if game_manager.claim_deadline_unix > 0 and now_unix > game_manager.claim_deadline_unix:
-		return _expire_claim(game_manager.claim_window_id)
+	if int(game_manager.claim_offer_peer_id) != peer_id:
+		return _reject("Ignoring claim request from %s: the card is currently offered to %s." % [str(peer_id), str(game_manager.claim_offer_peer_id)])
 
 	var claimed_card: Card = game_manager.take_discard_top_for_peer(peer_id)
 	if claimed_card == null:
@@ -201,22 +213,42 @@ func _pass_claim(peer_id: int) -> Dictionary:
 		return _reject("Ignoring pass request from unknown peer %s." % str(peer_id))
 	if not game_manager.claim_window_active:
 		return _reject("Ignoring pass-pile request from %s: no active claim window." % str(peer_id))
+	if game_manager.claim_deadline_unix > 0 and Time.get_unix_time_from_system() >= float(game_manager.claim_deadline_unix):
+		return _expire_claim(game_manager.claim_window_id)
 	if not _eligible_claim_peer_ids().has(peer_id):
 		return _reject("Ignoring pass-pile request from %s: peer is not eligible for this Claim Window." % str(peer_id))
+	if int(game_manager.claim_offer_peer_id) != peer_id:
+		return _reject("Ignoring pass-pile request from %s: the card is currently offered to %s." % [str(peer_id), str(game_manager.claim_offer_peer_id)])
+	return _resolve_claim_pass(peer_id, false)
+
+func _timeout_claim_offer(expected_claim_id: int, expected_offer_peer_id: int) -> Dictionary:
+	if game_manager == null or not game_manager.claim_window_active:
+		return _reject("Ignoring Claim Window offer timeout: no active Claim Window.")
+	if game_manager.claim_window_id != expected_claim_id or int(game_manager.claim_offer_peer_id) != expected_offer_peer_id:
+		return _reject("Ignoring stale Claim Window offer timeout.")
+	if Time.get_unix_time_from_system() >= float(game_manager.claim_deadline_unix):
+		return _expire_claim(expected_claim_id)
+	return _resolve_claim_pass(expected_offer_peer_id, true)
+
+func _resolve_claim_pass(peer_id: int, timed_out: bool) -> Dictionary:
 	if claim_pass_window_id != game_manager.claim_window_id:
 		_reset_claim_pass_tracking(game_manager.claim_window_id)
 	if claim_passed_peer_ids.has(peer_id):
 		return _reject("Ignoring pass-pile request from %s: already passed this Claim Window." % str(peer_id))
 	claim_passed_peer_ids[peer_id] = true
 	game_manager.claim_last_passed_peer_id = peer_id
-	_refresh_claim_status_rows()
 	var result: Dictionary = _accept()
-	_add_log(result, "Peer %s passed on the pile offer." % str(peer_id))
-	if _all_eligible_claim_players_passed():
+	_add_log(result, "Peer %s %s on the pile offer." % [str(peer_id), "timed out and passed" if timed_out else "passed"])
+	var remaining_peer_ids: Array = _remaining_claim_peer_ids()
+	if remaining_peer_ids.is_empty():
 		_add_log(result, "All eligible players passed. Closing Claim Window early.")
 		_refresh_claim_status_rows(-1, true)
 		game_manager.clear_claim_window()
 		_reset_claim_pass_tracking(-1)
+	else:
+		game_manager.claim_offer_peer_id = int(remaining_peer_ids[0])
+		_refresh_claim_status_rows()
+		result["claim_offer_changed"] = true
 	result["public_state_changed"] = true
 	return result
 
@@ -282,18 +314,31 @@ func _start_claim_window(opened_by_peer_id: int, duration_seconds: int, result: 
 		game_manager.clear_claim_window()
 		_reset_claim_pass_tracking(-1)
 		return false
+	game_manager.claim_offer_peer_id = int(_remaining_claim_peer_ids()[0])
 	_refresh_claim_status_rows()
 	result["claim_timer_claim_id"] = claim_id
+	result["claim_offer_changed"] = true
 	return true
 
 func _eligible_claim_peer_ids() -> Array:
 	var eligible: Array = []
 	if game_manager == null:
 		return eligible
+	var order: Array = game_manager.player_order
+	if order.is_empty():
+		return eligible
 	var opener_peer_id: int = int(game_manager.claim_opened_by_peer_id)
 	var current_turn_peer_id: int = game_manager.get_current_player_peer_id()
-	for raw_peer_id in players.keys():
-		var peer_id: int = int(raw_peer_id)
+	var current_index: int = clampi(int(game_manager.current_player_index), 0, order.size() - 1)
+	for offset in range(1, order.size()):
+		var player_entry: Variant = order[(current_index + offset) % order.size()]
+		var peer_id: int = -1
+		if player_entry is Player:
+			peer_id = (player_entry as Player).peer_id
+		elif typeof(player_entry) == TYPE_DICTIONARY:
+			peer_id = int((player_entry as Dictionary).get("peer_id", -1))
+		if not players.has(peer_id):
+			continue
 		if peer_id == opener_peer_id:
 			continue
 		if peer_id == current_turn_peer_id:
@@ -301,8 +346,15 @@ func _eligible_claim_peer_ids() -> Array:
 		if peer_id == last_discard_peer_id:
 			continue
 		eligible.append(peer_id)
-	eligible.sort()
 	return eligible
+
+func _remaining_claim_peer_ids() -> Array:
+	var remaining: Array = []
+	for raw_peer_id in _eligible_claim_peer_ids():
+		var peer_id: int = int(raw_peer_id)
+		if not claim_passed_peer_ids.has(peer_id):
+			remaining.append(peer_id)
+	return remaining
 
 func _all_eligible_claim_players_passed() -> bool:
 	var eligible_peer_ids: Array = _eligible_claim_peer_ids()
@@ -340,6 +392,7 @@ func _accept() -> Dictionary:
 		"round_update": {},
 		"claim_notification": {},
 		"claim_timer_claim_id": -1,
+		"claim_offer_changed": false,
 		"round_finished": {},
 		"put_down_error_peer_id": -1
 	}
