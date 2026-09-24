@@ -1,7 +1,7 @@
 extends RefCounted
 class_name AIMeldPlanner
 
-const SEARCH_BUDGET: int = 30000
+const SEARCH_BUDGET: int = 100000
 
 static func find_plan(observation: Dictionary) -> Array:
 	var requirement_data: Dictionary = observation.get("round_requirement", {})
@@ -33,36 +33,66 @@ static func _search(hand: Array, requirement: RoundRequirement, progress: Dictio
 		return {"ok": true, "groups": []}
 	if hand.size() < _minimum_group_size(requirement, progress):
 		return {"ok": false}
-	if hand.size() > 24:
+	if hand.size() > 32:
 		return {"ok": false}
-	var max_mask: int = 1 << hand.size()
-	var minimum_size: int = _minimum_group_size(requirement, progress)
-	for group_size in range(minimum_size, hand.size() + 1):
-		for mask in range(1, max_mask):
-			budget["left"] = int(budget["left"]) - 1
-			if int(budget["left"]) <= 0:
-				return {"ok": false}
-			if _bit_count(mask) != group_size:
-				continue
-			var selected: Array[Card] = []
-			var selected_data: Array = []
-			var remaining: Array = []
-			for i in range(hand.size()):
-				if mask & (1 << i):
-					var card_data: Dictionary = hand[i]
-					selected.append(Card.from_dict(card_data))
-					selected_data.append(card_data)
-				else:
-					remaining.append(hand[i])
-			var validation: Dictionary = PutDownValidator.validate_single_group(selected, requirement, progress)
-			if not bool(validation.get("ok", false)):
-				continue
-			var next_progress: Dictionary = _advanced_progress(progress, validation)
-			var continuation: Dictionary = _search(remaining, requirement, next_progress, budget)
-			if bool(continuation.get("ok", false)):
-				var groups: Array = [selected_data]
-				groups.append_array(continuation.get("groups", []))
-				return {"ok": true, "groups": groups}
+	for group_size in _candidate_group_sizes(hand, requirement, progress):
+		var found: Dictionary = _search_combinations(hand, requirement, progress, budget, group_size, 0, [])
+		if bool(found.get("ok", false)):
+			return found
+		if int(budget["left"]) <= 0:
+			break
+	return {"ok": false}
+
+static func _candidate_group_sizes(hand: Array, requirement: RoundRequirement, progress: Dictionary) -> Array[int]:
+	var sizes: Array[int] = []
+	if requirement.all_cards:
+		var minimum_total: int = 3 * maxi(0, requirement.sets_of_3 - int(progress.get("sets_done", 0))) \
+			+ 4 * maxi(0, requirement.runs_of_4 - int(progress.get("runs4_done", 0))) \
+			+ 7 * maxi(0, requirement.runs_of_7 - int(progress.get("runs7_done", 0)))
+		var largest: int = mini(13, hand.size() - minimum_total + _minimum_group_size(requirement, progress))
+		for size in range(largest, _minimum_group_size(requirement, progress) - 1, -1):
+			sizes.append(size)
+	else:
+		if int(progress.get("runs7_done", 0)) < requirement.runs_of_7:
+			sizes.append(7)
+		if int(progress.get("runs4_done", 0)) < requirement.runs_of_4:
+			sizes.append(4)
+		if int(progress.get("sets_done", 0)) < requirement.sets_of_3:
+			sizes.append(3)
+	return sizes
+
+static func _search_combinations(hand: Array, requirement: RoundRequirement, progress: Dictionary, budget: Dictionary, target_size: int, next_index: int, selected_indices: Array) -> Dictionary:
+	if selected_indices.size() == target_size:
+		budget["left"] = int(budget["left"]) - 1
+		if int(budget["left"]) < 0:
+			return {"ok": false}
+		var selected: Array[Card] = []
+		var selected_data: Array = []
+		var remaining: Array = []
+		for index in range(hand.size()):
+			var card_data: Dictionary = hand[index]
+			if selected_indices.has(index):
+				selected.append(Card.from_dict(card_data))
+				selected_data.append(card_data)
+			else:
+				remaining.append(card_data)
+		var validation: Dictionary = PutDownValidator.validate_single_group(selected, requirement, progress)
+		if not bool(validation.get("ok", false)):
+			return {"ok": false}
+		var continuation: Dictionary = _search(remaining, requirement, _advanced_progress(progress, validation), budget)
+		if bool(continuation.get("ok", false)):
+			var groups: Array = [selected_data]
+			groups.append_array(continuation.get("groups", []))
+			return {"ok": true, "groups": groups}
+		return {"ok": false}
+	for index in range(next_index, hand.size() - (target_size - selected_indices.size()) + 1):
+		if int(budget["left"]) <= 0:
+			break
+		selected_indices.append(index)
+		var found: Dictionary = _search_combinations(hand, requirement, progress, budget, target_size, index + 1, selected_indices)
+		selected_indices.pop_back()
+		if bool(found.get("ok", false)):
+			return found
 	return {"ok": false}
 
 static func _advanced_progress(progress: Dictionary, validation: Dictionary) -> Dictionary:
@@ -99,10 +129,3 @@ static func _minimum_group_size(requirement: RoundRequirement, progress: Diction
 	if int(progress.get("runs7_done", 0)) < requirement.runs_of_7:
 		minimum = mini(minimum, 7)
 	return minimum
-
-static func _bit_count(value: int) -> int:
-	var count: int = 0
-	while value > 0:
-		count += value & 1
-		value >>= 1
-	return count

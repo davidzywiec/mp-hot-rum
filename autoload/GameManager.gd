@@ -163,11 +163,27 @@ func initialize_discard_pile() -> void:
 	if top_card != null:
 		discard_pile.append(top_card)
 		public_card_history.append({"event": "initial_discard", "card": top_card.to_dict(), "peer_id": -1})
+	else:
+		replenish_deck_if_empty()
 
 func get_discard_top_card() -> Card:
 	if discard_pile.is_empty():
 		return null
 	return discard_pile[discard_pile.size() - 1]
+
+func replenish_deck_if_empty() -> bool:
+	if not _is_server_authority() or deck == null or not deck.cards.is_empty():
+		return false
+	deck.build_deck()
+	deck.build_deck()
+	deck.shuffle()
+	var seeded_discard: bool = discard_pile.is_empty()
+	if seeded_discard:
+		var first_card: Card = deck.draw_card()
+		discard_pile.append(first_card)
+		public_card_history.append({"event": "replenish_discard", "card": first_card.to_dict(), "peer_id": -1})
+	_log_game("Deck was empty; added two shuffled decks%s." % (" and seeded Discard" if seeded_discard else ""))
+	return true
 
 func draw_card_from_deck_for_peer(peer_id: int) -> Card:
 	if not _is_server_authority():
@@ -886,6 +902,7 @@ func advance_to_next_player() -> void:
 	current_player_index = (current_player_index + 1) % player_order.size()
 	reset_turn_pickup_completed()
 	_refresh_current_player_peer_id()
+	replenish_deck_if_empty()
 	_log_game("Current player advanced to index %d (%s)" % [current_player_index, get_player_name(current_player_index)])
 
 func advance_to_next_round() -> void:
@@ -923,9 +940,11 @@ func apply_game_state(state: Dictionary) -> void:
 		player.peer_id = int(p.get("peer_id", -1))
 		player.name = p.get("name", "")
 		player.ready = p.get("ready", false)
+		player.is_ai = bool(p.get("is_ai", false))
+		player.difficulty = str(p.get("difficulty", ""))
 		player.current_phase = p.get("current_phase", 1)
 		player.score = p.get("score", 0)
-		if player.peer_id < 0:
+		if player.peer_id == -1:
 			continue
 		new_players[player.peer_id] = player
 	players = new_players
@@ -947,6 +966,7 @@ func apply_game_state(state: Dictionary) -> void:
 	current_player_peer_id = int(state.get("current_player_peer_id", -1))
 	starting_player_index = int(state.get("starting_player_index", starting_player_index))
 	claim_window_active = bool(state.get("claim_window_active", false))
+	claim_window_id = int(state.get("claim_window_id", claim_window_id))
 	claim_deadline_unix = int(state.get("claim_deadline_unix", 0))
 	claim_opened_by_peer_id = int(state.get("claim_opened_by_peer_id", -1))
 	claim_eligible_peer_ids.clear()
@@ -999,7 +1019,7 @@ func apply_game_state(state: Dictionary) -> void:
 				continue
 			var meld_data: Dictionary = (raw_meld as Dictionary).duplicate(true)
 			var owner_peer_id: int = int(meld_data.get("owner_peer_id", -1))
-			if owner_peer_id >= 0:
+			if owner_peer_id != -1:
 				var owner_melds_variant: Variant = player_committed_melds.get(owner_peer_id, [])
 				var owner_melds: Array = []
 				if typeof(owner_melds_variant) == TYPE_ARRAY:

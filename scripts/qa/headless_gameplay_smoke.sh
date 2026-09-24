@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-godot4}"
 LOG_DIR="${LOG_DIR:-"$ROOT_DIR/.tmp/headless-gameplay-smoke"}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-30}"
+SMOKE_AI_DIFFICULTY="${SMOKE_AI_DIFFICULTY:-}"
 SERVER_LOG="$LOG_DIR/server.log"
 CLIENT_ONE_LOG="$LOG_DIR/client-one.log"
 CLIENT_TWO_LOG="$LOG_DIR/client-two.log"
@@ -43,16 +44,25 @@ if ! kill -0 "$server_pid" 2>/dev/null; then
 fi
 
 echo "[SMOKE] Starting smoke clients..."
-"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_ONE_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- --headless-smoke --player-name=SmokeOne --start-game "--timeout=$TIMEOUT_SECONDS" >"$CLIENT_ONE_LOG" 2>&1 &
+client_one_args=(--headless-smoke --player-name=SmokeOne --start-game "--timeout=$TIMEOUT_SECONDS")
+if [[ -n "$SMOKE_AI_DIFFICULTY" ]]; then
+	client_one_args+=("--add-ai=$SMOKE_AI_DIFFICULTY")
+fi
+"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_ONE_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- "${client_one_args[@]}" >"$CLIENT_ONE_LOG" 2>&1 &
 client_one_pid="$!"
-"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_TWO_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- --headless-smoke --player-name=SmokeTwo "--timeout=$TIMEOUT_SECONDS" >"$CLIENT_TWO_LOG" 2>&1 &
-client_two_pid="$!"
+if [[ -z "$SMOKE_AI_DIFFICULTY" ]]; then
+	"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_TWO_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- --headless-smoke --player-name=SmokeTwo "--timeout=$TIMEOUT_SECONDS" >"$CLIENT_TWO_LOG" 2>&1 &
+	client_two_pid="$!"
+fi
 
 set +e
 wait "$client_one_pid"
 client_one_status="$?"
-wait "$client_two_pid"
-client_two_status="$?"
+client_two_status=0
+if [[ -n "$client_two_pid" ]]; then
+	wait "$client_two_pid"
+	client_two_status="$?"
+fi
 set -e
 
 if [[ "$client_one_status" -ne 0 || "$client_two_status" -ne 0 ]]; then

@@ -1,0 +1,16 @@
+{
+	"id": "ai_simulation_test",
+	"name": "AI Simulation Test",
+	"description": "One-round server-side AI test ruleset.",
+	"rounds_total": 1.0,
+	"rounds": [
+		{
+			"round": 1.0,
+			"deal_count": 4.0,
+			"all_cards": false,
+			"sets": 1.0,
+			"run_of_4": 0.0,
+			"run_of_7": 0.0
+		}
+	]
+}

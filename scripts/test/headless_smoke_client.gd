@@ -7,6 +7,7 @@ const SETTLE_SECONDS: float = 0.25
 var server_address: String = DEFAULT_SERVER_ADDRESS
 var player_name: String = "SmokeClient"
 var starts_game: bool = false
+var add_ai_difficulty: String = ""
 var timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
 var connected: bool = false
@@ -18,6 +19,7 @@ var took_turn: bool = false
 var observed_turn_advance: bool = false
 var turn_peer_id: int = -1
 var next_turn_peer_id: int = -1
+var passed_claim_window_id: int = -1
 
 func _ready() -> void:
 	_parse_args()
@@ -42,6 +44,8 @@ func _parse_args() -> void:
 			player_name = arg.trim_prefix("--player-name=")
 		elif arg == "--start-game":
 			starts_game = true
+		elif arg.begins_with("--add-ai="):
+			add_ai_difficulty = arg.trim_prefix("--add-ai=")
 		elif arg.begins_with("--timeout="):
 			timeout_seconds = maxf(1.0, float(arg.trim_prefix("--timeout=")))
 
@@ -57,6 +61,8 @@ func _run() -> void:
 	var peer_id: int = multiplayer.get_unique_id()
 	Network_Manager.rpc_id(1, "register_player", player_name, peer_id)
 	Network_Manager.rpc_id(1, "register_ready_flag", peer_id, true)
+	if not add_ai_difficulty.is_empty():
+		Network_Manager.rpc_id(1, "register_add_ai_player", add_ai_difficulty)
 	print("[SMOKE][%s] Registered as peer %d." % [player_name, peer_id])
 
 	if starts_game:
@@ -67,7 +73,7 @@ func _run() -> void:
 		print("[SMOKE][%s] Requested game start countdown." % player_name)
 
 	if not await _wait_until(func() -> bool:
-		return int(latest_state.get("round_number", 0)) >= 1 and int(latest_state.get("current_player_peer_id", -1)) > 0
+		return int(latest_state.get("round_number", 0)) >= 1 and int(latest_state.get("current_player_peer_id", -1)) != -1
 	, timeout_seconds):
 		_fail("Timed out waiting for initial game state.")
 		return
@@ -75,6 +81,19 @@ func _run() -> void:
 	if not await _wait_until(func() -> bool: return not private_hand.is_empty(), timeout_seconds):
 		_fail("Timed out waiting for private hand.")
 		return
+	if not add_ai_difficulty.is_empty():
+		var ai_peer_id: int = -1
+		for raw_player in latest_players:
+			var player: Dictionary = raw_player
+			if bool(player.get("is_ai", false)):
+				ai_peer_id = int(player.get("peer_id", -1))
+				break
+		if ai_peer_id == -1 or not GameManager.players.has(ai_peer_id) or not (GameManager.players[ai_peer_id] as Player).is_ai:
+			_fail("Client Game roster did not retain AI identity.")
+			return
+		if (GameManager.players[ai_peer_id] as Player).difficulty != add_ai_difficulty:
+			_fail("Client Game roster did not retain AI difficulty.")
+			return
 
 	turn_peer_id = int(latest_state.get("current_player_peer_id", -1))
 	if turn_peer_id == peer_id:
@@ -120,7 +139,13 @@ func _on_game_state_updated(state: Dictionary) -> void:
 	var previous_peer_id: int = int(latest_state.get("current_player_peer_id", -1))
 	latest_state = state
 	var current_peer_id: int = int(latest_state.get("current_player_peer_id", -1))
-	if turn_peer_id > 0 and previous_peer_id == turn_peer_id and current_peer_id > 0 and current_peer_id != turn_peer_id:
+	if not add_ai_difficulty.is_empty() and bool(latest_state.get("claim_window_active", false)) and current_peer_id != multiplayer.get_unique_id():
+		var claim_window_id: int = int(latest_state.get("claim_window_id", -1))
+		var offer_peer_id: int = int(latest_state.get("claim_offer_peer_id", multiplayer.get_unique_id()))
+		if claim_window_id != passed_claim_window_id and offer_peer_id == multiplayer.get_unique_id():
+			passed_claim_window_id = claim_window_id
+			Network_Manager.rpc_id(1, "register_pass_pile")
+	if turn_peer_id != -1 and previous_peer_id == turn_peer_id and current_peer_id != -1 and current_peer_id != turn_peer_id:
 		observed_turn_advance = true
 		next_turn_peer_id = current_peer_id
 

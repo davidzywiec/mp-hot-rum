@@ -49,9 +49,95 @@ var roster_locked: bool = false
 var countdown_active: bool = false
 var countdown_generation: int = 0
 var ai_random: RandomNumberGenerator = RandomNumberGenerator.new()
+var ai_simulation_budget: int = 32
+var ai_heuristic_weights: Dictionary = {"set": 1.0, "run": 1.0, "wild": 1.0, "point_risk": 1.0, "opponent_risk": 1.0}
+var ai_action_delay_seconds: float = 0.6
+var ai_action_pending: bool = false
+var game_started: bool = false
+var simulation_mode: bool = false
 
 func set_ai_seed(seed_value: int) -> void:
 	ai_random.seed = seed_value
+	seed(seed_value)
+
+func set_ai_simulation_budget(sample_count: int) -> void:
+	ai_simulation_budget = clampi(sample_count, 1, 256)
+
+func set_ai_heuristic_weights(weights: Dictionary) -> void:
+	for key in weights.keys():
+		if ai_heuristic_weights.has(key):
+			ai_heuristic_weights[key] = clampf(float(weights[key]), 0.0, 4.0)
+
+func set_ai_action_delay(delay_seconds: float) -> void:
+	ai_action_delay_seconds = maxf(0.0, delay_seconds)
+
+func start_ai_simulation(difficulties: Array, seed_value: int, ruleset_path: String = "res://data/rulesets/default_ruleset.json") -> Dictionary:
+	if game_started or not players.is_empty():
+		return {"ok": false, "reason": "Simulation needs a fresh server session"}
+	if difficulties.size() < 2 or difficulties.size() > MAX_CONNECTIONS:
+		return {"ok": false, "reason": "Simulation needs 2–6 AI Players"}
+	for difficulty in difficulties:
+		if not ["Easy", "Medium", "Hard"].has(str(difficulty)):
+			return {"ok": false, "reason": "Invalid AI difficulty"}
+	simulation_mode = true
+	set_ai_seed(seed_value)
+	for raw_difficulty in difficulties:
+		var difficulty: String = str(raw_difficulty)
+		var player: Player = Player.new()
+		player.peer_id = next_ai_peer_id
+		player.name = "AI %d [%s]" % [abs(next_ai_peer_id + 1), difficulty]
+		player.ready = true
+		player.is_ai = true
+		player.difficulty = difficulty
+		players[player.peer_id] = player
+		roster_order.append(player.peer_id)
+		next_ai_peer_id -= 1
+	_refresh_roster()
+	start_game(ruleset_path)
+	return {"ok": true, "players": get_lobby_snapshot().get("players", [])}
+
+func run_ai_simulation(max_actions: int = 10000) -> Dictionary:
+	if not simulation_mode or not game_started:
+		return {"status": "not_started", "game_over": false}
+	var actions_taken: int = 0
+	while not game_manager.game_over and actions_taken < max_actions:
+		if game_manager.round_summary_pending:
+			_advance_round_after_confirmations()
+			continue
+		if game_manager.claim_window_active and _ai_actor_peer_id() == -1:
+			var expiry: Dictionary = _ensure_turn_flow().apply_move(-1, {"type": "expire_claim", "claim_window_id": game_manager.claim_window_id})
+			if not bool(expiry.get("ok", false)):
+				return _simulation_report("stalled", actions_taken, str(expiry.get("reason", "Claim Window could not close")))
+			_apply_turn_flow_result(expiry)
+			actions_taken += 1
+			continue
+		var result: Dictionary = step_ai()
+		if not bool(result.get("ok", false)):
+			var failure: Dictionary = _simulation_report("stalled", actions_taken, str(result.get("reason", "AI action failed")))
+			failure["failed_action"] = result.get("action", {})
+			failure["actor_peer_id"] = result.get("actor_peer_id", -1)
+			return failure
+		actions_taken += 1
+	if game_manager.game_over:
+		game_started = false
+		return _simulation_report("complete", actions_taken, "")
+	return _simulation_report("action_limit", actions_taken, "Simulation action limit reached")
+
+func _simulation_report(status: String, actions_taken: int, reason: String) -> Dictionary:
+	return {
+		"status": status,
+		"game_over": game_manager != null and game_manager.game_over,
+		"actions_taken": actions_taken,
+		"round_number": game_manager.round_number if game_manager != null else 0,
+		"current_player_peer_id": game_manager.get_current_player_peer_id() if game_manager != null else -1,
+		"turn_pickup_completed": game_manager.turn_pickup_completed if game_manager != null else false,
+		"claim_window_active": game_manager.claim_window_active if game_manager != null else false,
+		"deck_count": game_manager.deck.size() if game_manager != null and game_manager.deck != null else 0,
+		"discard_top": game_manager.serialize_discard_top() if game_manager != null else {},
+		"winner_peer_ids": game_manager.get_winning_peer_ids() if game_manager != null else [],
+		"score_sheet": game_manager.get_score_sheet_data() if game_manager != null else [],
+		"reason": reason
+	}
 
 # TODO: point this at your actual game scene when its added
 const GAME_SCENE_PATH: String = "res://scenes/game/MainGame.tscn"
@@ -184,6 +270,9 @@ func get_ai_observation(ai_peer_id: int) -> Dictionary:
 	var deck_count: int = 0
 	if game_manager.deck != null:
 		deck_count = game_manager.deck.size()
+	var point_values: Dictionary = {}
+	for number in range(1, 14):
+		point_values[number] = game_manager.card_point_rules.get_points_for_number(number) if game_manager.card_point_rules != null else (15 if number == 1 else (20 if number == 2 else (5 if number <= 9 else 10)))
 	var observation: Dictionary = {
 		"peer_id": ai_peer_id,
 		"difficulty": player.difficulty,
@@ -193,15 +282,20 @@ func get_ai_observation(ai_peer_id: int) -> Dictionary:
 		"current_player_peer_id": game_manager.get_current_player_peer_id(),
 		"turn_pickup_completed": game_manager.turn_pickup_completed,
 		"claim_window_active": game_manager.claim_window_active,
+		"claim_offer_peer_id": _current_claim_offer_peer_id(),
 		"claim_eligible_peer_ids": _ensure_turn_flow().eligible_claim_peer_ids(),
 		"discard_top": game_manager.serialize_discard_top(),
 		"deck_count": deck_count,
+		"deck_copies": game_manager.deck.deck_copies if game_manager.deck != null else 0,
 		"public_melds": game_manager.serialize_public_melds(),
 		"public_card_history": game_manager.public_card_history.duplicate(true),
 		"has_put_down": game_manager.has_player_put_down(ai_peer_id),
 		"put_down_progress": game_manager.get_put_down_progress_for_peer(ai_peer_id),
 		"staged_cards": game_manager.get_put_down_buffer_for_peer(ai_peer_id),
-		"player_count": players.size()
+		"player_count": players.size(),
+		"simulation_budget": ai_simulation_budget,
+		"card_point_values": point_values,
+		"heuristic_weights": ai_heuristic_weights.duplicate()
 	}
 	if observation["turn_pickup_completed"] and not observation["has_put_down"] and not observation["claim_window_active"]:
 		observation["put_down_plan"] = AI_MELD_PLANNER_SCRIPT.find_plan(observation)
@@ -219,9 +313,11 @@ func get_ai_observation(ai_peer_id: int) -> Dictionary:
 	return observation
 
 func step_ai() -> Dictionary:
-	if game_manager == null or game_manager.game_over or game_manager.round_summary_pending:
+	if game_manager == null or not game_started or game_manager.game_over or game_manager.round_summary_pending:
 		return {"ok": false, "reason": "No active AI turn"}
-	var ai_peer_id: int = game_manager.get_current_player_peer_id()
+	if not game_manager.turn_pickup_completed and not game_manager.claim_window_active:
+		game_manager.replenish_deck_if_empty()
+	var ai_peer_id: int = _ai_actor_peer_id()
 	var observation: Dictionary = get_ai_observation(ai_peer_id)
 	if observation.is_empty():
 		return {"ok": false, "reason": "Current Player is not AI"}
@@ -235,20 +331,74 @@ func step_ai() -> Dictionary:
 	if action.is_empty():
 		return {"ok": false, "reason": "AI has no action"}
 	if str(action.get("type", "")) == "put_down":
+		var before_round: int = game_manager.round_number
 		var before_progress: Dictionary = game_manager.get_put_down_progress_for_peer(ai_peer_id).duplicate(true)
 		register_put_down(ai_peer_id, action.get("cards_data", []))
 		var after_progress: Dictionary = game_manager.get_put_down_progress_for_peer(ai_peer_id)
-		var applied: bool = before_progress != after_progress or game_manager.has_player_put_down(ai_peer_id)
-		return {"ok": applied, "action": action}
+		var applied: bool = before_progress != after_progress or game_manager.has_player_put_down(ai_peer_id) or game_manager.round_number != before_round or game_manager.round_summary_pending or game_manager.game_over
+		return {"ok": applied, "action": action, "actor_peer_id": ai_peer_id}
 	if str(action.get("type", "")) == "add_to_meld":
+		var before_round: int = game_manager.round_number
 		var before_hand_size: int = game_manager.get_hand_size_for_peer(ai_peer_id)
 		register_add_to_meld(ai_peer_id, int(action.get("meld_id", -1)), action.get("card_data", {}))
-		return {"ok": game_manager.get_hand_size_for_peer(ai_peer_id) < before_hand_size, "action": action}
+		return {"ok": game_manager.get_hand_size_for_peer(ai_peer_id) < before_hand_size or game_manager.round_number != before_round or game_manager.round_summary_pending or game_manager.game_over, "action": action, "actor_peer_id": ai_peer_id}
 	var result: Dictionary = _ensure_turn_flow().apply_move(ai_peer_id, action)
 	if not bool(result.get("ok", false)):
-		return {"ok": false, "reason": str(result.get("reason", "AI action rejected")), "action": action}
+		return {"ok": false, "reason": str(result.get("reason", "AI action rejected")), "action": action, "actor_peer_id": ai_peer_id}
 	_apply_turn_flow_result(result)
-	return {"ok": true, "action": action}
+	return {"ok": true, "action": action, "actor_peer_id": ai_peer_id}
+
+func _current_claim_offer_peer_id() -> int:
+	if game_manager == null or not game_manager.claim_window_active:
+		return -1
+	var offer_variant: Variant = game_manager.get("claim_offer_peer_id")
+	if typeof(offer_variant) == TYPE_INT and int(offer_variant) != -1:
+		return int(offer_variant)
+	var eligible: Array = _ensure_turn_flow().eligible_claim_peer_ids()
+	var passed: Array = _ensure_turn_flow().passed_claim_peer_ids()
+	var order: Array = game_manager.player_order
+	if order.is_empty():
+		return -1
+	var current_index: int = game_manager.current_player_index
+	for offset in range(1, order.size()):
+		var index: int = (current_index + offset) % order.size()
+		var entry: Variant = order[index]
+		var peer_id: int = int((entry as Player).peer_id) if entry is Player else int(entry.get("peer_id", -1))
+		if eligible.has(peer_id) and not passed.has(peer_id):
+			return peer_id
+	return -1
+
+func _ai_actor_peer_id() -> int:
+	if game_manager == null:
+		return -1
+	if game_manager.claim_window_active:
+		var offered_peer_id: int = _current_claim_offer_peer_id()
+		if players.has(offered_peer_id) and (players[offered_peer_id] as Player).is_ai:
+			return offered_peer_id
+		return -1
+	var current_peer_id: int = game_manager.get_current_player_peer_id()
+	if players.has(current_peer_id) and (players[current_peer_id] as Player).is_ai:
+		return current_peer_id
+	return -1
+
+func _schedule_ai_action() -> void:
+	if ai_action_pending or not game_started or game_manager == null:
+		return
+	if game_manager.game_over or game_manager.round_summary_pending:
+		return
+	var scheduled_peer_id: int = _ai_actor_peer_id()
+	if scheduled_peer_id == -1:
+		return
+	ai_action_pending = true
+	var timer: SceneTreeTimer = get_tree().create_timer(ai_action_delay_seconds, false)
+	timer.timeout.connect(func() -> void:
+		ai_action_pending = false
+		if not game_started or _ai_actor_peer_id() != scheduled_peer_id:
+			return
+		var result: Dictionary = step_ai()
+		if not bool(result.get("ok", false)):
+			_log_err("AI action failed: %s" % str(result.get("reason", "unknown")))
+	)
 
 func _validate_host_roster_edit(requesting_peer_id: int) -> Dictionary:
 	if roster_locked:
@@ -638,6 +788,8 @@ func _broadcast_game_state() -> void:
 		"starting_player_index": game_manager.starting_player_index,
 		"discard_top": game_manager.serialize_discard_top(),
 		"claim_window_active": game_manager.claim_window_active,
+		"claim_window_id": game_manager.claim_window_id,
+		"claim_offer_peer_id": _current_claim_offer_peer_id(),
 		"claim_deadline_unix": game_manager.claim_deadline_unix,
 		"claim_opened_by_peer_id": game_manager.claim_opened_by_peer_id,
 		"claim_eligible_peer_ids": claim_eligible_peer_ids,
@@ -671,6 +823,8 @@ func _broadcast_game_state() -> void:
 	if ProjectSettings.get_setting(SNAPSHOT_LOG_SETTING_PATH, false):
 		_log("Snapshot: %s" % str(snapshot))
 	Game_State_Manager.send_game_state(snapshot)
+	if game_started and not simulation_mode:
+		call_deferred("_schedule_ai_action")
 
 # Sync Countdown to start game (SERVER-AUTHORITATIVE)
 func register_countdown(requesting_peer_id: int, flag: bool, seconds: float = 10.0) -> Dictionary:
@@ -729,16 +883,18 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 		Game_State_Manager.send_toggle_countdown(false)
 
 # Start the game with the current default rule set
-func start_game() -> void:
+func start_game(ruleset_path: String = "res://data/rulesets/default_ruleset.json") -> void:
 	if game_manager == null:
 		_log_err("GameManager not initialized; cannot start game.")
 		return
 	play_again_votes.clear()
 	next_round_votes.clear()
+	game_started = true
+	roster_locked = true
 	_log("Server loading players into game.")
 	game_manager.load_players(players)
 	_log("Server starting game with default ruleset.")
-	game_manager.start_game()
+	game_manager.start_game(ruleset_path)
 	if turn_flow != null:
 		turn_flow.reset_claim_tracking()
 	_send_private_hands()
@@ -910,6 +1066,8 @@ func _end_game_session(reason: String) -> void:
 	play_again_votes.clear()
 	next_round_votes.clear()
 	ready_players.clear()
+	game_started = false
+	roster_locked = false
 	if turn_flow != null:
 		turn_flow.reset_claim_tracking()
 	if game_manager != null:
@@ -921,6 +1079,8 @@ func _return_to_lobby_with_connected_players(reason: String) -> void:
 	play_again_votes.clear()
 	next_round_votes.clear()
 	ready_players.clear()
+	game_started = false
+	roster_locked = false
 	for raw_peer_id in players.keys():
 		var peer_id: int = int(raw_peer_id)
 		if players.has(peer_id) and players[peer_id] is Player:
