@@ -159,7 +159,7 @@ func _ready() -> void:
 func _on_game_state_updated(state: Dictionary) -> void:
 	GameManager.apply_game_state(state)
 	var claim_last_passed_peer_id: int = int(state.get("claim_last_passed_peer_id", -1))
-	if claim_last_passed_peer_id > 0:
+	if claim_last_passed_peer_id != -1:
 		_mark_claim_window_passed(claim_last_passed_peer_id)
 	_update_play_again_votes_from_state(state)
 	_update_next_round_votes_from_state(state)

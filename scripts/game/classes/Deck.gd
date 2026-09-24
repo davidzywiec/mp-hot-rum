@@ -4,6 +4,7 @@ extends RefCounted
 
 var cards: Array[Card] = []
 var card_point_rules: CardPointRules = null
+var deck_copies: int = 0
 
 const DEFAULT_CARD_POINT_RULES_PATH: String = "res://data/scoring/default_card_point_rules.tres"
 
@@ -42,6 +43,7 @@ func size() -> int:
 
 func build_deck() -> void:
 	# Build a standard deck
+	deck_copies += 1
 	for suit in Card.Suit.values():
 		for number in range(1, 14):
 			var points: int = _points_for_number(number)
