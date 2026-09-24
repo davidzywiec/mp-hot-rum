@@ -19,6 +19,7 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
 
 var current_player : Player
 var latest_player_state: Array = []
+var latest_host_peer_id: int = -1
 
 func _is_server_authority() -> bool:
 	return multiplayer.is_server() or OS.has_feature("server")
@@ -146,12 +147,14 @@ func _disconnect_local_network_session() -> void:
 # --- Host assignment sync ---
 @rpc
 func receive_host(new_host_peer_id: int) -> void:
+	latest_host_peer_id = new_host_peer_id
 	_log_server("New host is: %s" % str(new_host_peer_id))
 	SignalManager.ready_to_start.emit(false) # default off; UI will recompute
 	# Let UI know so it can enable/disable Start for the right player
 	SignalManager.emit_signal("host_changed", new_host_peer_id)
 
 func send_host(new_host_peer_id: int) -> void:
+	latest_host_peer_id = new_host_peer_id
 	rpc("receive_host", new_host_peer_id)
 	SignalManager.emit_signal("host_changed", new_host_peer_id)
 

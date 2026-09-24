@@ -15,10 +15,7 @@ const CLAIM_WINDOW_SECONDS: int = 30
 const PLAY_AGAIN_RESTART_DELAY_SECONDS: float = 0.35
 const RETURN_TO_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
 const TURN_FLOW_SCRIPT: GDScript = preload("res://scripts/game/classes/TurnFlow.gd")
-const AI_STRATEGY_SCRIPT: GDScript = preload("res://scripts/ai/AIPlayerStrategy.gd")
-const MEDIUM_AI_STRATEGY_SCRIPT: GDScript = preload("res://scripts/ai/MediumAIStrategy.gd")
-const HARD_AI_STRATEGY_SCRIPT: GDScript = preload("res://scripts/ai/HardAIStrategy.gd")
-const AI_MELD_PLANNER_SCRIPT: GDScript = preload("res://scripts/ai/AIMeldPlanner.gd")
+const AI_PLAYER_DECISION_SCRIPT: GDScript = preload("res://scripts/ai/AIPlayerDecision.gd")
 
 # Timestamped logging for server output.
 func _ts() -> String:
@@ -77,23 +74,14 @@ func start_ai_simulation(difficulties: Array, seed_value: int, ruleset_path: Str
 	if difficulties.size() < 2 or difficulties.size() > MAX_CONNECTIONS:
 		return {"ok": false, "reason": "Simulation needs 2–6 AI Players"}
 	for difficulty in difficulties:
-		if not ["Easy", "Medium", "Hard"].has(str(difficulty)):
+		if not AI_PLAYER_DECISION_SCRIPT.is_valid_difficulty(str(difficulty)):
 			return {"ok": false, "reason": "Invalid AI difficulty"}
 	if not FileAccess.file_exists(ruleset_path):
 		return {"ok": false, "reason": "Ruleset not found: %s" % ruleset_path}
 	simulation_mode = true
 	set_ai_seed(seed_value)
 	for raw_difficulty in difficulties:
-		var difficulty: String = str(raw_difficulty)
-		var player: Player = Player.new()
-		player.peer_id = next_ai_peer_id
-		player.name = "AI %d [%s]" % [abs(next_ai_peer_id + 1), difficulty]
-		player.ready = true
-		player.is_ai = true
-		player.difficulty = difficulty
-		players[player.peer_id] = player
-		roster_order.append(player.peer_id)
-		next_ai_peer_id -= 1
+		_add_ai_player_to_roster(str(raw_difficulty))
 	_refresh_roster()
 	start_game(ruleset_path)
 	if game_manager.ruleset == null:
@@ -224,8 +212,13 @@ func register_add_ai_player(requesting_peer_id: int, difficulty: String) -> Dict
 		return gate
 	if players.size() >= MAX_CONNECTIONS:
 		return {"ok": false, "reason": "Lobby full"}
-	if not ["Easy", "Medium", "Hard"].has(difficulty):
+	if not AI_PLAYER_DECISION_SCRIPT.is_valid_difficulty(difficulty):
 		return {"ok": false, "reason": "Invalid AI difficulty"}
+	var player: Player = _add_ai_player_to_roster(difficulty)
+	_refresh_roster()
+	return {"ok": true, "peer_id": player.peer_id}
+
+func _add_ai_player_to_roster(difficulty: String) -> Player:
 	var player: Player = Player.new()
 	player.peer_id = next_ai_peer_id
 	player.name = "AI %d [%s]" % [abs(next_ai_peer_id + 1), difficulty]
@@ -235,8 +228,7 @@ func register_add_ai_player(requesting_peer_id: int, difficulty: String) -> Dict
 	players[player.peer_id] = player
 	roster_order.append(player.peer_id)
 	next_ai_peer_id -= 1
-	_refresh_roster()
-	return {"ok": true, "peer_id": player.peer_id}
+	return player
 
 func register_remove_ai_player(requesting_peer_id: int, ai_peer_id: int) -> Dictionary:
 	var gate: Dictionary = _validate_host_roster_edit(requesting_peer_id)
@@ -255,7 +247,7 @@ func register_ai_difficulty(requesting_peer_id: int, ai_peer_id: int, difficulty
 		return gate
 	if not players.has(ai_peer_id) or not (players[ai_peer_id] as Player).is_ai:
 		return {"ok": false, "reason": "AI Player not found"}
-	if not ["Easy", "Medium", "Hard"].has(difficulty):
+	if not AI_PLAYER_DECISION_SCRIPT.is_valid_difficulty(difficulty):
 		return {"ok": false, "reason": "Invalid AI difficulty"}
 	(players[ai_peer_id] as Player).difficulty = difficulty
 	(players[ai_peer_id] as Player).name = "AI %d [%s]" % [abs(ai_peer_id + 1), difficulty]
@@ -309,20 +301,7 @@ func get_ai_observation(ai_peer_id: int) -> Dictionary:
 		"card_point_values": point_values,
 		"heuristic_weights": ai_heuristic_weights.duplicate()
 	}
-	if observation["turn_pickup_completed"] and not observation["has_put_down"] and not observation["claim_window_active"]:
-		observation["put_down_plan"] = AI_MELD_PLANNER_SCRIPT.find_plan(observation)
-	if observation["turn_pickup_completed"] and observation["has_put_down"] and not observation["claim_window_active"]:
-		var add_actions: Array = []
-		for raw_card in observation["own_hand"]:
-			var card_data: Dictionary = raw_card
-			var card: Card = Card.from_dict(card_data)
-			for raw_meld in observation["public_melds"]:
-				var meld_data: Dictionary = raw_meld
-				var validation: Dictionary = _validate_card_for_meld_add(meld_data, card)
-				if bool(validation.get("ok", false)):
-					add_actions.append({"type": "add_to_meld", "meld_id": int(meld_data.get("meld_id", -1)), "card_data": card_data})
-		observation["add_to_meld_actions"] = add_actions
-	return observation
+	return AI_PLAYER_DECISION_SCRIPT.prepare_observation(observation)
 
 func step_ai() -> Dictionary:
 	if game_manager == null or not game_started or game_manager.game_over or game_manager.round_summary_pending:
@@ -333,13 +312,7 @@ func step_ai() -> Dictionary:
 	var observation: Dictionary = get_ai_observation(ai_peer_id)
 	if observation.is_empty():
 		return {"ok": false, "reason": "Current Player is not AI"}
-	var difficulty: String = str(observation.get("difficulty", "Easy"))
-	var strategy: RefCounted = AI_STRATEGY_SCRIPT.new()
-	if difficulty == "Medium":
-		strategy = MEDIUM_AI_STRATEGY_SCRIPT.new()
-	elif difficulty == "Hard":
-		strategy = HARD_AI_STRATEGY_SCRIPT.new()
-	var action: Dictionary = strategy.choose_action(observation, ai_random)
+	var action: Dictionary = AI_PLAYER_DECISION_SCRIPT.choose_action(observation, ai_random)
 	if action.is_empty():
 		return {"ok": false, "reason": "AI has no action"}
 	if str(action.get("type", "")) == "put_down":
@@ -651,7 +624,7 @@ func register_add_to_meld(peer_id: int, meld_id: int, card_data: Dictionary) -> 
 		_reject_put_down(peer_id, "Selected card is not in your hand.")
 		return
 	var add_card: Card = selected_cards[0]
-	var add_validation: Dictionary = _validate_card_for_meld_add(target_meld, add_card)
+	var add_validation: Dictionary = PutDownValidator.validate_card_for_meld_add(target_meld, add_card)
 	if not bool(add_validation.get("ok", false)):
 		_reject_put_down(peer_id, str(add_validation.get("reason", "Card does not fit this meld.")))
 		return
@@ -1127,44 +1100,6 @@ func _schedule_play_again_restart_validation() -> void:
 			return
 		_broadcast_game_state()
 	)
-
-func _validate_card_for_meld_add(meld_data: Dictionary, card: Card) -> Dictionary:
-	if card == null:
-		return {
-			"ok": false,
-			"reason": "Invalid card."
-		}
-	var cards_data_variant: Variant = meld_data.get("cards_data", [])
-	if typeof(cards_data_variant) != TYPE_ARRAY:
-		return {
-			"ok": false,
-			"reason": "Target meld is invalid."
-		}
-	var meld_cards: Array[Card] = []
-	var cards_data: Array = cards_data_variant
-	for raw_card in cards_data:
-		if typeof(raw_card) != TYPE_DICTIONARY:
-			return {
-				"ok": false,
-				"reason": "Target meld is invalid."
-			}
-		meld_cards.append(Card.from_dict(raw_card))
-
-	var group_type: String = str(meld_data.get("group_type", ""))
-	match group_type:
-		PutDownValidator.GROUP_SET_3:
-			var set_cards: Array[Card] = meld_cards.duplicate()
-			set_cards.append(card)
-			var set_number: int = int(meld_data.get("set_number", -1))
-			return PutDownValidator.validate_set_cards(set_cards, set_number)
-		PutDownValidator.GROUP_RUN_4, PutDownValidator.GROUP_RUN_7:
-			var run_suit: int = int(meld_data.get("run_suit", -1))
-			return PutDownValidator.validate_run_add_to_ends(meld_cards, card, run_suit)
-		_:
-			return {
-				"ok": false,
-				"reason": "Unsupported meld type."
-			}
 
 func _ensure_game_manager_bound() -> bool:
 	if game_manager == null:

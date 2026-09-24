@@ -22,6 +22,7 @@ var is_host: bool = false
 var roster_locked: bool = false
 const MORNING_DIGEST_THEME: Theme = preload("res://Themes/GameUI.tres")
 const MDTheme: GDScript = preload("res://scripts/ui/morning_digest_theme.gd")
+const AI_PLAYER_DECISION_SCRIPT: GDScript = preload("res://scripts/ai/AIPlayerDecision.gd")
 
 var countdown_connection_done: bool = false
 @export var next_scene_fallback: String = "res://scenes/menu/main_menu.tscn" # used only if server sends same
@@ -34,13 +35,15 @@ func _ready() -> void:
 	_update_ready_button_label()
 	ready_btn.pressed.connect(set_ready_flag)
 	start_btn.pressed.connect(start_game)
-	for difficulty in ["Easy", "Medium", "Hard"]:
+	for difficulty in AI_PLAYER_DECISION_SCRIPT.DIFFICULTIES:
 		ai_difficulty_select.add_item(difficulty)
 	add_ai_button.pressed.connect(_on_add_ai_pressed)
 	SignalManager.host_changed.connect(_on_host_changed)
 	Game_State_Manager.player_state_updated.connect(update_lobby_ui)
 	Game_State_Manager.game_state_updated.connect(_on_game_state_updated)
 	Game_State_Manager.lobby_error.connect(_on_lobby_error)
+	if Game_State_Manager.latest_host_peer_id != -1:
+		_on_host_changed(Game_State_Manager.latest_host_peer_id)
 
 	# Force one update using latest known state
 	if Game_State_Manager.latest_player_state.size() > 0:
@@ -122,7 +125,7 @@ func _rebuild_ai_rows(players_data: Array) -> void:
 		if not is_host or roster_locked:
 			continue
 		var difficulty_select: OptionButton = OptionButton.new()
-		for difficulty in ["Easy", "Medium", "Hard"]:
+		for difficulty in AI_PLAYER_DECISION_SCRIPT.DIFFICULTIES:
 			difficulty_select.add_item(difficulty)
 		var current_difficulty: String = str(raw_player.get("difficulty", "Easy"))
 		for index in range(difficulty_select.item_count):

@@ -5,6 +5,31 @@ const GROUP_SET_3: String = "set3"
 const GROUP_RUN_4: String = "run4"
 const GROUP_RUN_7: String = "run7"
 
+static func validate_card_for_meld_add(meld_data: Dictionary, card: Card) -> Dictionary:
+	if card == null:
+		return {"ok": false, "reason": "Invalid card."}
+	var cards_data_variant: Variant = meld_data.get("cards_data", [])
+	if typeof(cards_data_variant) != TYPE_ARRAY:
+		return {"ok": false, "reason": "Target meld is invalid."}
+	var meld_cards: Array[Card] = []
+	var cards_data: Array = cards_data_variant
+	for raw_card in cards_data:
+		if typeof(raw_card) != TYPE_DICTIONARY:
+			return {"ok": false, "reason": "Target meld is invalid."}
+		meld_cards.append(Card.from_dict(raw_card))
+	var group_type: String = str(meld_data.get("group_type", ""))
+	match group_type:
+		GROUP_SET_3:
+			var set_cards: Array[Card] = meld_cards.duplicate()
+			set_cards.append(card)
+			var set_number: int = int(meld_data.get("set_number", -1))
+			return validate_set_cards(set_cards, set_number)
+		GROUP_RUN_4, GROUP_RUN_7:
+			var run_suit: int = int(meld_data.get("run_suit", -1))
+			return validate_run_add_to_ends(meld_cards, card, run_suit)
+		_:
+			return {"ok": false, "reason": "Unsupported meld type."}
+
 static func validate_single_group(selected_cards: Array[Card], requirement: RoundRequirement, progress: Dictionary) -> Dictionary:
 	if requirement == null:
 		return {
