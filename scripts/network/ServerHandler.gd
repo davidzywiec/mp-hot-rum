@@ -79,6 +79,8 @@ func start_ai_simulation(difficulties: Array, seed_value: int, ruleset_path: Str
 	for difficulty in difficulties:
 		if not ["Easy", "Medium", "Hard"].has(str(difficulty)):
 			return {"ok": false, "reason": "Invalid AI difficulty"}
+	if not FileAccess.file_exists(ruleset_path):
+		return {"ok": false, "reason": "Ruleset not found: %s" % ruleset_path}
 	simulation_mode = true
 	set_ai_seed(seed_value)
 	for raw_difficulty in difficulties:
@@ -94,6 +96,13 @@ func start_ai_simulation(difficulties: Array, seed_value: int, ruleset_path: Str
 		next_ai_peer_id -= 1
 	_refresh_roster()
 	start_game(ruleset_path)
+	if game_manager.ruleset == null:
+		game_started = false
+		simulation_mode = false
+		players.clear()
+		roster_order.clear()
+		game_manager.end_game_session()
+		return {"ok": false, "reason": "Could not load Ruleset: %s" % ruleset_path}
 	return {"ok": true, "players": get_lobby_snapshot().get("players", [])}
 
 func run_ai_simulation(max_actions: int = 10000) -> Dictionary:
@@ -102,7 +111,10 @@ func run_ai_simulation(max_actions: int = 10000) -> Dictionary:
 	var actions_taken: int = 0
 	while not game_manager.game_over and actions_taken < max_actions:
 		if game_manager.round_summary_pending:
+			var previous_round: int = game_manager.round_number
 			_advance_round_after_confirmations()
+			if game_manager.round_summary_pending and game_manager.round_number == previous_round:
+				return _simulation_report("stalled", actions_taken, "Round summary could not advance")
 			continue
 		if game_manager.claim_window_active and _ai_actor_peer_id() == -1:
 			var expiry: Dictionary = _ensure_turn_flow().apply_move(-1, {"type": "expire_claim", "claim_window_id": game_manager.claim_window_id})
@@ -830,6 +842,8 @@ func _broadcast_game_state() -> void:
 func register_countdown(requesting_peer_id: int, flag: bool, seconds: float = 10.0) -> Dictionary:
 	if requesting_peer_id != _current_host_peer_id():
 		return {"ok": false, "reason": "Only the Host may control countdown"}
+	if not flag:
+		return {"ok": false, "reason": "Countdown cannot be canceled after locking the Game Roster"}
 	if flag:
 		if roster_locked:
 			return {"ok": false, "reason": "Game roster locked"}

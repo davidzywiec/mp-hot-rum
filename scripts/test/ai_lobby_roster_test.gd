@@ -62,6 +62,9 @@ func _test_capacity_and_lock(server: Node) -> bool:
 	var late_edit: Dictionary = server.register_remove_ai_player(22, -3)
 	if not _expect(not bool(late_edit.get("ok", true)), "Host cannot edit during countdown"):
 		return false
+	var cancel: Dictionary = server.register_countdown(22, false)
+	if not _expect(not bool(cancel.get("ok", true)) and bool(server.get_lobby_snapshot().get("roster_locked", false)), "countdown cannot be canceled to unlock this Game Roster"):
+		return false
 	return true
 
 func _expect(condition: bool, description: String) -> bool:

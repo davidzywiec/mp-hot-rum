@@ -20,6 +20,17 @@ func _run() -> void:
 		return
 	if not _expect((result.get("winner_peer_ids", []) as Array).size() > 0, "simulation reports a winner"):
 		return
+	var game_manager: Node = server.game_manager
+	server.queue_free()
+	await process_frame
+	game_manager.end_game_session()
+	var invalid_server: Node = load("res://scripts/network/ServerHandler.gd").new()
+	get_root().add_child(invalid_server)
+	invalid_server.game_manager = game_manager
+	invalid_server._ensure_turn_flow()
+	var invalid: Dictionary = invalid_server.start_ai_simulation(["Easy", "Hard"], 4242, "res://data/rulesets/missing.json")
+	if not _expect(not bool(invalid.get("ok", true)), "simulation rejects a missing Ruleset at entry"):
+		return
 	print("[AI_SIMULATION_TEST][PASS]")
 	quit(0)
 
