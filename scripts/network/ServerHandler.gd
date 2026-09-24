@@ -708,7 +708,6 @@ func _broadcast_game_state() -> void:
 		"claim_offer_peer_id": _current_claim_offer_peer_id(),
 		"claim_deadline_unix": game_manager.claim_deadline_unix,
 		"claim_opened_by_peer_id": game_manager.claim_opened_by_peer_id,
-		"claim_offer_peer_id": game_manager.claim_offer_peer_id,
 		"claim_eligible_peer_ids": claim_eligible_peer_ids,
 		"claim_passed_peer_ids": claim_passed_peer_ids,
 		"claim_status_rows": game_manager.claim_status_rows.duplicate(true),

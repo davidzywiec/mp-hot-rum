@@ -28,6 +28,9 @@ class FakeGameManager extends Node:
 	func get_current_player_peer_id() -> int:
 		return (player_order[current_player_index] as Player).peer_id
 
+	func replenish_deck_if_empty() -> bool:
+		return false
+
 	func draw_card_from_deck_for_peer(_peer_id: int) -> Card:
 		return Card.new(Card.Suit.CLUBS, 4, 5)
 
