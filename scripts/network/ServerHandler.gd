@@ -478,6 +478,7 @@ func _broadcast_game_state() -> void:
 		"claim_window_active": game_manager.claim_window_active,
 		"claim_deadline_unix": game_manager.claim_deadline_unix,
 		"claim_opened_by_peer_id": game_manager.claim_opened_by_peer_id,
+		"claim_offer_peer_id": game_manager.claim_offer_peer_id,
 		"claim_eligible_peer_ids": claim_eligible_peer_ids,
 		"claim_passed_peer_ids": claim_passed_peer_ids,
 		"claim_status_rows": game_manager.claim_status_rows.duplicate(true),
@@ -839,9 +840,12 @@ func _apply_turn_flow_result(result: Dictionary) -> bool:
 
 	var claim_timer_claim_id: int = int(result.get("claim_timer_claim_id", -1))
 	if claim_timer_claim_id != -1:
-		var claim_timer: SceneTreeTimer = get_tree().create_timer(float(CLAIM_WINDOW_SECONDS), false)
+		var claim_seconds_remaining: float = maxf(0.01, float(game_manager.claim_deadline_unix) - Time.get_unix_time_from_system())
+		var claim_timer: SceneTreeTimer = get_tree().create_timer(claim_seconds_remaining, false)
 		claim_timer.timeout.connect(func ():
 			if not _ensure_game_manager_bound():
+				return
+			if not game_manager.claim_window_active or game_manager.claim_window_id != claim_timer_claim_id:
 				return
 			var expiry_result: Dictionary = _ensure_turn_flow().apply_move(0, {
 				"type": "expire_claim",
@@ -849,10 +853,36 @@ func _apply_turn_flow_result(result: Dictionary) -> bool:
 			})
 			_apply_turn_flow_result(expiry_result)
 		)
+	if bool(result.get("claim_offer_changed", false)):
+		_schedule_claim_offer_timeout()
 
 	if bool(result.get("public_state_changed", false)):
 		_broadcast_game_state()
 	return true
+
+func _schedule_claim_offer_timeout() -> void:
+	if game_manager == null or not game_manager.claim_window_active:
+		return
+	var offer_peer_id: int = int(game_manager.claim_offer_peer_id)
+	if offer_peer_id <= 0:
+		return
+	var offer_seconds: float = float(_ensure_turn_flow().claim_offer_timeout_seconds(Time.get_unix_time_from_system()))
+	if offer_seconds <= 0.0:
+		return
+	var claim_id: int = int(game_manager.claim_window_id)
+	var offer_timer: SceneTreeTimer = get_tree().create_timer(offer_seconds, false)
+	offer_timer.timeout.connect(func ():
+		if not _ensure_game_manager_bound():
+			return
+		if not game_manager.claim_window_active or game_manager.claim_window_id != claim_id or int(game_manager.claim_offer_peer_id) != offer_peer_id:
+			return
+		var timeout_result: Dictionary = _ensure_turn_flow().apply_move(0, {
+			"type": "timeout_claim_offer",
+			"claim_window_id": claim_id,
+			"claim_offer_peer_id": offer_peer_id
+		})
+		_apply_turn_flow_result(timeout_result)
+	)
 
 func register_hand_reorder(peer_id: int, cards_data: Array) -> void:
 	if game_manager == null:

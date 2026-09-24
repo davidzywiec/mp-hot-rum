@@ -1033,7 +1033,7 @@ func _can_local_claim_pile() -> bool:
 		return false
 	if not GameManager.claim_window_active:
 		return false
-	return _is_local_peer_eligible_for_claim_offer()
+	return _is_local_peer_eligible_for_claim_offer() and GameManager.claim_offer_peer_id == multiplayer.get_unique_id()
 
 func _can_local_pass_claim_offer() -> bool:
 	if _round_interactions_blocked():
@@ -1042,7 +1042,7 @@ func _can_local_pass_claim_offer() -> bool:
 		return false
 	if not GameManager.claim_window_active:
 		return false
-	return _is_local_peer_eligible_for_claim_offer()
+	return _is_local_peer_eligible_for_claim_offer() and GameManager.claim_offer_peer_id == multiplayer.get_unique_id()
 
 func _is_local_peer_eligible_for_claim_offer() -> bool:
 	var local_peer_id: int = multiplayer.get_unique_id()
@@ -1055,7 +1055,7 @@ func _is_local_peer_eligible_for_claim_offer() -> bool:
 	return not _is_local_players_turn()
 
 func _should_show_local_claim_window() -> bool:
-	return _can_local_claim_pile() or _can_local_pass_claim_offer()
+	return not _round_interactions_blocked() and GameManager.claim_window_active and _is_local_peer_eligible_for_claim_offer()
 
 func _should_show_turn_pickup_overlay() -> bool:
 	if _round_interactions_blocked():
@@ -1706,6 +1706,8 @@ func _claim_window_rows_for_display() -> Array:
 			status = GameManager.CLAIM_STATUS_PENDING
 			if GameManager.claim_passed_peer_ids.has(peer_id):
 				status = GameManager.CLAIM_STATUS_PASSED
+			elif GameManager.claim_offer_peer_id == peer_id:
+				status = GameManager.CLAIM_STATUS_OFFERED
 		rows.append({
 			"peer_id": peer_id,
 			"name": _player_name_from_peer_id(peer_id),
@@ -1770,6 +1772,8 @@ func _claim_status_color(status: String) -> Color:
 		return MorningDigestTheme.ACCENT_GREEN
 	if status == GameManager.CLAIM_STATUS_AUTO_PASSED:
 		return Color(0.580, 0.450, 0.140, 1.0)
+	if status == GameManager.CLAIM_STATUS_OFFERED:
+		return MorningDigestTheme.ACCENT_GREEN
 	if status == GameManager.CLAIM_STATUS_PENDING:
 		return MorningDigestTheme.ACCENT_BLUE
 	return Color(0.430, 0.430, 0.440, 1.0)
@@ -1849,7 +1853,7 @@ func _mark_claim_window_claimed(claimant_peer_id: int) -> void:
 		var peer_id: int = int(row.get("peer_id", -1))
 		if peer_id == claimant_peer_id:
 			row["status"] = GameManager.CLAIM_STATUS_CLAIMED
-		elif str(row.get("status", "")) == GameManager.CLAIM_STATUS_PENDING:
+		elif str(row.get("status", "")) == GameManager.CLAIM_STATUS_PENDING or str(row.get("status", "")) == GameManager.CLAIM_STATUS_OFFERED:
 			row["status"] = GameManager.CLAIM_STATUS_PASSED
 		updated_rows.append(row)
 	GameManager.claim_status_rows = updated_rows.duplicate(true)

@@ -53,7 +53,7 @@ The sequence for a player's turn, including choosing a pickup source, resolving 
 _Avoid_: Turn action, action flow
 
 **Claim Window**:
-The opportunity for non-turn players to claim or pass on the discard pile card after the current player declines it by drawing from the deck. A player cannot claim the card they just discarded.
+The ordered opportunity for eligible Non-turn Players to claim or pass on the top Discard Pile card after the Current Player draws from the Deck. Beginning with the next player in turn order, each eligible player decides in sequence; a player cannot claim the card they just discarded.
 _Avoid_: Pickup window, pass window
 
 **Claim Penalty**:

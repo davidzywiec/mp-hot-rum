@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/test/claim_offer_timer_test.gd" id="1_claim_offer_timer_test"]
+
+[node name="ClaimOfferTimerTest" type="Node"]
+script = ExtResource("1_claim_offer_timer_test")
