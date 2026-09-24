@@ -7,7 +7,7 @@ func _run() -> void:
 	await process_frame
 	ProjectSettings.set_setting("debug/network_logs", false)
 	ProjectSettings.set_setting("debug/game_logs", false)
-	var server: Node = load("res://scripts/network/ServerHandler.gd").new()
+	var server: Node = load("res://scripts/ai/AISimulationServer.gd").new()
 	get_root().add_child(server)
 	server.game_manager = get_root().get_node("GameManager")
 	server._ensure_turn_flow()
@@ -24,7 +24,7 @@ func _run() -> void:
 	server.queue_free()
 	await process_frame
 	game_manager.end_game_session()
-	var invalid_server: Node = load("res://scripts/network/ServerHandler.gd").new()
+	var invalid_server: Node = load("res://scripts/ai/AISimulationServer.gd").new()
 	get_root().add_child(invalid_server)
 	invalid_server.game_manager = game_manager
 	invalid_server._ensure_turn_flow()

@@ -8,7 +8,7 @@ func _run() -> void:
 	ProjectSettings.set_setting("debug/network_logs", false)
 	ProjectSettings.set_setting("debug/game_logs", false)
 	var options: Dictionary = _parse_options(OS.get_cmdline_user_args())
-	var server: Node = load("res://scripts/network/ServerHandler.gd").new()
+	var server: Node = load("res://scripts/ai/AISimulationServer.gd").new()
 	get_root().add_child(server)
 	server.game_manager = get_root().get_node("GameManager")
 	server._ensure_turn_flow()

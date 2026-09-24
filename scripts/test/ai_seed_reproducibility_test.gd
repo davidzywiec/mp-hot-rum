@@ -24,7 +24,7 @@ func _run() -> void:
 func _simulate_once(seed_value: int) -> Dictionary:
 	var game_manager: Node = get_root().get_node("GameManager")
 	game_manager.end_game_session()
-	var server: Node = load("res://scripts/network/ServerHandler.gd").new()
+	var server: Node = load("res://scripts/ai/AISimulationServer.gd").new()
 	get_root().add_child(server)
 	server.game_manager = game_manager
 	server._ensure_turn_flow()
