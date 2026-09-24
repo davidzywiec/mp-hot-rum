@@ -43,18 +43,59 @@ func join_server(address: String):
 @rpc("any_peer")
 func register_player(player_name: String, peer_id : int):
 	if handler is ServerHandler:
-		print("Received username from client: %s" % player_name)
-		handler.register_player(player_name, peer_id)
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		if sender_peer_id != peer_id:
+			return
+		var result: Dictionary = handler.register_player(player_name, sender_peer_id)
+		Game_State_Manager.send_lobby_admission_result(sender_peer_id, bool(result.get("ok", false)), str(result.get("reason", "")))
+		if not bool(result.get("ok", false)):
+			var rejected_peer_id: int = sender_peer_id
+			var timer: SceneTreeTimer = get_tree().create_timer(0.4)
+			timer.timeout.connect(func() -> void:
+				if multiplayer.multiplayer_peer != null and multiplayer.get_peers().has(rejected_peer_id):
+					multiplayer.multiplayer_peer.disconnect_peer(rejected_peer_id)
+			)
 
 @rpc("any_peer")
 func register_ready_flag(peer_id: int, ready_flag: bool):
 	if handler is ServerHandler:
-		handler.register_ready_flag(peer_id, ready_flag)
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		if sender_peer_id == peer_id:
+			handler.register_ready_flag(sender_peer_id, ready_flag)
+
+@rpc("any_peer")
+func register_add_ai_player(difficulty: String) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		var result: Dictionary = handler.register_add_ai_player(sender_peer_id, difficulty)
+		if not bool(result.get("ok", false)):
+			Game_State_Manager.send_lobby_error(sender_peer_id, str(result.get("reason", "Cannot add AI Player")))
+
+@rpc("any_peer")
+func register_remove_ai_player(ai_peer_id: int) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		var result: Dictionary = handler.register_remove_ai_player(sender_peer_id, ai_peer_id)
+		if not bool(result.get("ok", false)):
+			Game_State_Manager.send_lobby_error(sender_peer_id, str(result.get("reason", "Cannot remove AI Player")))
+
+@rpc("any_peer")
+func register_ai_difficulty(ai_peer_id: int, difficulty: String) -> void:
+	if handler is ServerHandler:
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		var result: Dictionary = handler.register_ai_difficulty(sender_peer_id, ai_peer_id, difficulty)
+		if not bool(result.get("ok", false)):
+			Game_State_Manager.send_lobby_error(sender_peer_id, str(result.get("reason", "Cannot change AI difficulty")))
 
 @rpc("any_peer")
 func register_countdown(peer_id: int, flag: bool, countdown_time: int = 10):
 	if handler is ServerHandler:
-		handler._toggle_countdown(flag, countdown_time)
+		var sender_peer_id: int = multiplayer.get_remote_sender_id()
+		if sender_peer_id != peer_id:
+			return
+		var result: Dictionary = handler.register_countdown(sender_peer_id, flag, countdown_time)
+		if not bool(result.get("ok", false)):
+			Game_State_Manager.send_lobby_error(sender_peer_id, str(result.get("reason", "Cannot start Game")))
 
 @rpc("any_peer")
 func register_hand_reorder(cards_data: Array) -> void:

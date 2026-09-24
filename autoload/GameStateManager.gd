@@ -11,6 +11,8 @@ signal private_hand_updated(cards: Array)
 signal private_put_down_buffer_updated(cards: Array)
 signal pile_claimed_notification(claimant_peer_id: int, card_data: Dictionary, extra_card_drawn: bool)
 signal put_down_error(message: String)
+signal lobby_admission_result(accepted: bool, reason: String)
+signal lobby_error(message: String)
 
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
@@ -40,6 +42,20 @@ func receive_player_state(players_data: Array) -> void:
 func send_player_state(players_data: Array) -> void:
 	rpc("receive_player_state", players_data)
 	emit_signal("player_state_updated", players_data)
+
+@rpc("authority")
+func receive_lobby_admission_result(accepted: bool, reason: String) -> void:
+	lobby_admission_result.emit(accepted, reason)
+
+func send_lobby_admission_result(peer_id: int, accepted: bool, reason: String) -> void:
+	rpc_id(peer_id, "receive_lobby_admission_result", accepted, reason)
+
+@rpc("authority")
+func receive_lobby_error(message: String) -> void:
+	lobby_error.emit(message)
+
+func send_lobby_error(peer_id: int, message: String) -> void:
+	rpc_id(peer_id, "receive_lobby_error", message)
 
 # EXISTING: legacy boolean toggle (kept)
 @rpc

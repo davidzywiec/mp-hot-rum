@@ -43,6 +43,24 @@ offset_top = -66.0
 grow_horizontal = 2
 grow_vertical = 0
 
+[node name="AIControls" type="HBoxContainer" parent="VBC"]
+visible = false
+layout_mode = 2
+
+[node name="DifficultySelect" type="OptionButton" parent="VBC/AIControls"]
+layout_mode = 2
+
+[node name="AddAIButton" type="Button" parent="VBC/AIControls"]
+layout_mode = 2
+text = "Add AI Player"
+
+[node name="AIList" type="VBoxContainer" parent="VBC"]
+layout_mode = 2
+
+[node name="LobbyError" type="Label" parent="VBC"]
+visible = false
+layout_mode = 2
+
 [node name="StartButton" type="Button" parent="VBC"]
 visible = false
 layout_mode = 2

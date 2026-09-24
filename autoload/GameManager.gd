@@ -14,6 +14,7 @@ var current_player_peer_id : int = -1
 var starting_player_index : int = 0
 var round_number : int = 1
 var discard_pile: Array[Card] = []
+var public_card_history: Array = []
 var claim_window_active: bool = false
 var claim_deadline_unix: int = 0
 var claim_opened_by_peer_id: int = -1
@@ -97,6 +98,7 @@ func end_game_session() -> void:
 	player_order.clear()
 	player_hands.clear()
 	discard_pile.clear()
+	public_card_history.clear()
 	clear_claim_window()
 	clear_claim_status_rows()
 	current_player_index = 0
@@ -152,6 +154,7 @@ func initialize_discard_pile() -> void:
 	if not _is_server_authority():
 		return
 	discard_pile.clear()
+	public_card_history.clear()
 	clear_claim_window()
 	clear_claim_status_rows()
 	if deck == null:
@@ -159,6 +162,7 @@ func initialize_discard_pile() -> void:
 	var top_card: Card = deck.draw_card()
 	if top_card != null:
 		discard_pile.append(top_card)
+		public_card_history.append({"event": "initial_discard", "card": top_card.to_dict(), "peer_id": -1})
 
 func get_discard_top_card() -> Card:
 	if discard_pile.is_empty():
@@ -186,6 +190,7 @@ func take_discard_top_for_peer(peer_id: int) -> Card:
 	if discard_pile.is_empty():
 		return null
 	var taken_card: Card = discard_pile.pop_back()
+	public_card_history.append({"event": "claim" if peer_id != get_current_player_peer_id() else "take_discard", "card": taken_card.to_dict(), "peer_id": peer_id})
 	if not player_hands.has(peer_id):
 		player_hands[peer_id] = []
 	var hand_cards: Array = player_hands[peer_id]
@@ -217,6 +222,7 @@ func discard_card_from_peer(peer_id: int, card_data: Dictionary) -> Card:
 		hand_cards.remove_at(i)
 		player_hands[hand_key] = hand_cards
 		discard_pile.append(hand_card)
+		public_card_history.append({"event": "discard", "card": hand_card.to_dict(), "peer_id": peer_id})
 		return hand_card
 	return null
 

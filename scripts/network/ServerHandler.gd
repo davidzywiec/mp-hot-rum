@@ -6,6 +6,7 @@ class_name ServerHandler
 
 const PORT: int = 7000
 const MAX_CONNECTIONS: int = 6
+const MAX_PENDING_NETWORK_PEERS: int = 16
 const NETWORK_LOG_SETTING_PATH: String = "debug/network_logs"
 const SNAPSHOT_LOG_SETTING_PATH: String = "debug/snapshot_logs"
 const DEBUG_UI_SETTING_PATH: String = "debug/ui_debug"
@@ -14,6 +15,10 @@ const CLAIM_WINDOW_SECONDS: int = 30
 const PLAY_AGAIN_RESTART_DELAY_SECONDS: float = 0.35
 const RETURN_TO_MENU_SCENE_PATH: String = "res://scenes/menu/main_menu.tscn"
 const TURN_FLOW_SCRIPT: GDScript = preload("res://scripts/game/classes/TurnFlow.gd")
+const AI_STRATEGY_SCRIPT: GDScript = preload("res://scripts/ai/AIPlayerStrategy.gd")
+const MEDIUM_AI_STRATEGY_SCRIPT: GDScript = preload("res://scripts/ai/MediumAIStrategy.gd")
+const HARD_AI_STRATEGY_SCRIPT: GDScript = preload("res://scripts/ai/HardAIStrategy.gd")
+const AI_MELD_PLANNER_SCRIPT: GDScript = preload("res://scripts/ai/AIMeldPlanner.gd")
 
 # Timestamped logging for server output.
 func _ts() -> String:
@@ -37,6 +42,16 @@ var turn_flow: RefCounted = null
 var play_again_votes: Dictionary = {} # key: peer_id, value: true
 var play_again_restart_pending: bool = false
 var next_round_votes: Dictionary = {} # key: peer_id, value: true
+var roster_order: Array[int] = []
+var human_join_order: Array[int] = []
+var next_ai_peer_id: int = -2
+var roster_locked: bool = false
+var countdown_active: bool = false
+var countdown_generation: int = 0
+var ai_random: RandomNumberGenerator = RandomNumberGenerator.new()
+
+func set_ai_seed(seed_value: int) -> void:
+	ai_random.seed = seed_value
 
 # TODO: point this at your actual game scene when its added
 const GAME_SCENE_PATH: String = "res://scenes/game/MainGame.tscn"
@@ -46,7 +61,7 @@ func start():
 	var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 
 	# Attempt to bind server on the given port with max allowed clients
-	var error: int = peer.create_server(PORT, MAX_CONNECTIONS)
+	var error: int = peer.create_server(PORT, MAX_PENDING_NETWORK_PEERS)
 
 	# Check if there was an error during setup
 	if error != OK:
@@ -86,26 +101,172 @@ func _on_peer_connected(peer_id: int) -> void:
 	# Defer actual registration until username is received
 
 # Called externally when the client sends their username
-func register_player(new_player_info: String, peer_id: int) -> void:
+func register_player(new_player_info: String, peer_id: int) -> Dictionary:
 	_log("Server registering: %s" % new_player_info)
+	if players.has(peer_id):
+		return {"ok": true, "peer_id": peer_id}
+	if roster_locked:
+		return {"ok": false, "reason": "Game roster locked"}
+	if players.size() >= MAX_CONNECTIONS:
+		return {"ok": false, "reason": "Lobby full"}
+	var player: Player = Player.new()
+	player.peer_id = peer_id
+	player.name = new_player_info
+	players[peer_id] = player
+	roster_order.append(peer_id)
+	human_join_order.append(peer_id)
+	_log("%s has joined the game!" % new_player_info)
+	SignalManager.player_connected.emit(new_player_info)
+	_refresh_roster()
+	return {"ok": true, "peer_id": peer_id}
 
-	if not players.has(peer_id):
-		var player: Player = Player.new()
-		player.peer_id = peer_id
-		player.name = new_player_info
-		players[peer_id] = player
+func register_add_ai_player(requesting_peer_id: int, difficulty: String) -> Dictionary:
+	var gate: Dictionary = _validate_host_roster_edit(requesting_peer_id)
+	if not bool(gate.get("ok", false)):
+		return gate
+	if players.size() >= MAX_CONNECTIONS:
+		return {"ok": false, "reason": "Lobby full"}
+	if not ["Easy", "Medium", "Hard"].has(difficulty):
+		return {"ok": false, "reason": "Invalid AI difficulty"}
+	var player: Player = Player.new()
+	player.peer_id = next_ai_peer_id
+	player.name = "AI %d [%s]" % [abs(next_ai_peer_id + 1), difficulty]
+	player.ready = true
+	player.is_ai = true
+	player.difficulty = difficulty
+	players[player.peer_id] = player
+	roster_order.append(player.peer_id)
+	next_ai_peer_id -= 1
+	_refresh_roster()
+	return {"ok": true, "peer_id": player.peer_id}
 
-		_log("%s has joined the game!" % new_player_info)
-		SignalManager.player_connected.emit(new_player_info)
-		if game_manager != null:
-			game_manager.load_players(players)
-		_broadcast_player_state()
-		_broadcast_game_state()
-		_broadcast_host_if_changed()
+func register_remove_ai_player(requesting_peer_id: int, ai_peer_id: int) -> Dictionary:
+	var gate: Dictionary = _validate_host_roster_edit(requesting_peer_id)
+	if not bool(gate.get("ok", false)):
+		return gate
+	if not players.has(ai_peer_id) or not (players[ai_peer_id] as Player).is_ai:
+		return {"ok": false, "reason": "AI Player not found"}
+	players.erase(ai_peer_id)
+	roster_order.erase(ai_peer_id)
+	_refresh_roster()
+	return {"ok": true}
+
+func register_ai_difficulty(requesting_peer_id: int, ai_peer_id: int, difficulty: String) -> Dictionary:
+	var gate: Dictionary = _validate_host_roster_edit(requesting_peer_id)
+	if not bool(gate.get("ok", false)):
+		return gate
+	if not players.has(ai_peer_id) or not (players[ai_peer_id] as Player).is_ai:
+		return {"ok": false, "reason": "AI Player not found"}
+	if not ["Easy", "Medium", "Hard"].has(difficulty):
+		return {"ok": false, "reason": "Invalid AI difficulty"}
+	(players[ai_peer_id] as Player).difficulty = difficulty
+	(players[ai_peer_id] as Player).name = "AI %d [%s]" % [abs(ai_peer_id + 1), difficulty]
+	_refresh_roster()
+	return {"ok": true}
+
+func get_lobby_snapshot() -> Dictionary:
+	var public_players: Array = []
+	for peer_id in roster_order:
+		if players.has(peer_id):
+			public_players.append((players[peer_id] as Player).to_public_dict())
+	return {
+		"players": public_players,
+		"host_peer_id": _current_host_peer_id(),
+		"roster_locked": roster_locked
+	}
+
+func get_ai_observation(ai_peer_id: int) -> Dictionary:
+	if game_manager == null or not players.has(ai_peer_id):
+		return {}
+	var player: Player = players[ai_peer_id] as Player
+	if player == null or not player.is_ai:
+		return {}
+	var deck_count: int = 0
+	if game_manager.deck != null:
+		deck_count = game_manager.deck.size()
+	var observation: Dictionary = {
+		"peer_id": ai_peer_id,
+		"difficulty": player.difficulty,
+		"own_hand": game_manager.serialize_hand_for_peer(ai_peer_id),
+		"round_number": game_manager.round_number,
+		"round_requirement": game_manager.serialize_current_round_requirement(),
+		"current_player_peer_id": game_manager.get_current_player_peer_id(),
+		"turn_pickup_completed": game_manager.turn_pickup_completed,
+		"claim_window_active": game_manager.claim_window_active,
+		"claim_eligible_peer_ids": _ensure_turn_flow().eligible_claim_peer_ids(),
+		"discard_top": game_manager.serialize_discard_top(),
+		"deck_count": deck_count,
+		"public_melds": game_manager.serialize_public_melds(),
+		"public_card_history": game_manager.public_card_history.duplicate(true),
+		"has_put_down": game_manager.has_player_put_down(ai_peer_id),
+		"put_down_progress": game_manager.get_put_down_progress_for_peer(ai_peer_id),
+		"staged_cards": game_manager.get_put_down_buffer_for_peer(ai_peer_id),
+		"player_count": players.size()
+	}
+	if observation["turn_pickup_completed"] and not observation["has_put_down"] and not observation["claim_window_active"]:
+		observation["put_down_plan"] = AI_MELD_PLANNER_SCRIPT.find_plan(observation)
+	if observation["turn_pickup_completed"] and observation["has_put_down"] and not observation["claim_window_active"]:
+		var add_actions: Array = []
+		for raw_card in observation["own_hand"]:
+			var card_data: Dictionary = raw_card
+			var card: Card = Card.from_dict(card_data)
+			for raw_meld in observation["public_melds"]:
+				var meld_data: Dictionary = raw_meld
+				var validation: Dictionary = _validate_card_for_meld_add(meld_data, card)
+				if bool(validation.get("ok", false)):
+					add_actions.append({"type": "add_to_meld", "meld_id": int(meld_data.get("meld_id", -1)), "card_data": card_data})
+		observation["add_to_meld_actions"] = add_actions
+	return observation
+
+func step_ai() -> Dictionary:
+	if game_manager == null or game_manager.game_over or game_manager.round_summary_pending:
+		return {"ok": false, "reason": "No active AI turn"}
+	var ai_peer_id: int = game_manager.get_current_player_peer_id()
+	var observation: Dictionary = get_ai_observation(ai_peer_id)
+	if observation.is_empty():
+		return {"ok": false, "reason": "Current Player is not AI"}
+	var difficulty: String = str(observation.get("difficulty", "Easy"))
+	var strategy: RefCounted = AI_STRATEGY_SCRIPT.new()
+	if difficulty == "Medium":
+		strategy = MEDIUM_AI_STRATEGY_SCRIPT.new()
+	elif difficulty == "Hard":
+		strategy = HARD_AI_STRATEGY_SCRIPT.new()
+	var action: Dictionary = strategy.choose_action(observation, ai_random)
+	if action.is_empty():
+		return {"ok": false, "reason": "AI has no action"}
+	if str(action.get("type", "")) == "put_down":
+		var before_progress: Dictionary = game_manager.get_put_down_progress_for_peer(ai_peer_id).duplicate(true)
+		register_put_down(ai_peer_id, action.get("cards_data", []))
+		var after_progress: Dictionary = game_manager.get_put_down_progress_for_peer(ai_peer_id)
+		var applied: bool = before_progress != after_progress or game_manager.has_player_put_down(ai_peer_id)
+		return {"ok": applied, "action": action}
+	if str(action.get("type", "")) == "add_to_meld":
+		var before_hand_size: int = game_manager.get_hand_size_for_peer(ai_peer_id)
+		register_add_to_meld(ai_peer_id, int(action.get("meld_id", -1)), action.get("card_data", {}))
+		return {"ok": game_manager.get_hand_size_for_peer(ai_peer_id) < before_hand_size, "action": action}
+	var result: Dictionary = _ensure_turn_flow().apply_move(ai_peer_id, action)
+	if not bool(result.get("ok", false)):
+		return {"ok": false, "reason": str(result.get("reason", "AI action rejected")), "action": action}
+	_apply_turn_flow_result(result)
+	return {"ok": true, "action": action}
+
+func _validate_host_roster_edit(requesting_peer_id: int) -> Dictionary:
+	if roster_locked:
+		return {"ok": false, "reason": "Game roster locked"}
+	if requesting_peer_id != _current_host_peer_id():
+		return {"ok": false, "reason": "Only the Host may manage AI Players"}
+	return {"ok": true}
+
+func _refresh_roster() -> void:
+	if game_manager != null:
+		game_manager.load_players(players)
+	_broadcast_player_state()
+	_broadcast_game_state()
+	_broadcast_host_if_changed()
 
 # Called externally when the client marks themselves ready
 func register_ready_flag(peer_id: int, ready_flag: bool) -> void:
-	if players.has(peer_id):
+	if players.has(peer_id) and not roster_locked and not (players[peer_id] as Player).is_ai:
 		players[peer_id].ready = ready_flag
 		ready_players[peer_id] = ready_flag
 
@@ -119,6 +280,8 @@ func register_play_again_vote(peer_id: int, wants_play_again: bool = true) -> vo
 		return
 	if not players.has(peer_id):
 		_log_err("Ignoring play-again vote from unknown peer %s." % str(peer_id))
+		return
+	if (players[peer_id] as Player).is_ai:
 		return
 	if not game_manager.game_over:
 		_log("Ignoring play-again vote from %s: game is not over." % str(peer_id))
@@ -142,6 +305,8 @@ func register_next_round(peer_id: int) -> void:
 	if not players.has(peer_id):
 		_log_err("Ignoring next-round request from unknown peer %s." % str(peer_id))
 		return
+	if (players[peer_id] as Player).is_ai:
+		return
 	if not game_manager.round_summary_pending:
 		_log("Ignoring next-round request from %s: no round summary is pending." % str(peer_id))
 		return
@@ -151,13 +316,16 @@ func register_next_round(peer_id: int) -> void:
 		_log("Peer %s is ready for the next round. Waiting for other players." % str(peer_id))
 		_broadcast_game_state()
 		return
+	_advance_round_after_confirmations()
+
+func _advance_round_after_confirmations() -> void:
 	if not game_manager.advance_to_pending_next_round():
-		_log_err("Failed to advance pending round after request from %s." % str(peer_id))
+		_log_err("Failed to advance pending round after confirmations.")
 		return
 	next_round_votes.clear()
 	if turn_flow != null:
 		turn_flow.reset_claim_tracking()
-	_log("Peer %s advanced from round summary to round %d." % [str(peer_id), int(game_manager.round_number)])
+	_log("Round summary complete. Advancing to round %d." % int(game_manager.round_number))
 	_send_private_hands()
 	Game_State_Manager.send_round_update(
 		game_manager.round_number,
@@ -387,6 +555,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	_log("Peer %d disconnected." % peer_id)
 	# Optional: implement disconnection cleanup if you store peer_id -> name mapping
 	players.erase(peer_id)
+	roster_order.erase(peer_id)
+	human_join_order.erase(peer_id)
 	ready_players.erase(peer_id)
 	play_again_votes.erase(peer_id)
 	next_round_votes.erase(peer_id)
@@ -411,16 +581,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	_broadcast_host_if_changed()
 
 func _current_host_peer_id() -> int:
-	# First player == lowest connected peer_id
-	var ids: Array = []
-	# Prefer authoritative list; use the registries you maintain
-	for pid in players.keys():
-		ids.append(pid)
-	ids.sort()
-	if ids.size() > 0:
-		return ids[0]
-	else:
-		return -1
+	for peer_id in human_join_order:
+		if players.has(peer_id):
+			return peer_id
+	return -1
 
 func _broadcast_host_if_changed() -> void:
 	var host: int = _current_host_peer_id()
@@ -440,9 +604,7 @@ func _broadcast_player_state() -> void:
 		_log("Warning: No players to broadcast.")
 		return
 
-	var state_array: Array = []
-	for p in players.values():
-		state_array.append(p.to_public_dict())
+	var state_array: Array = get_lobby_snapshot().get("players", [])
 
 	# Optional: preview the data being sent
 	_log("Broadcasting player state to clients: %s" % str(state_array))
@@ -495,7 +657,9 @@ func _broadcast_game_state() -> void:
 		"round_summary_continue_peer_ids": _next_round_vote_peer_ids(),
 		"game_over": game_manager.game_over,
 		"winner_peer_ids": game_manager.get_winning_peer_ids(),
-		"play_again_peer_ids": _play_again_vote_peer_ids()
+		"play_again_peer_ids": _play_again_vote_peer_ids(),
+		"host_peer_id": _current_host_peer_id(),
+		"roster_locked": roster_locked
 	}
 	if TURN_DEBUG:
 		_log("[TURN_DEBUG][SERVER][snapshot] round=%d current_idx=%d current_peer=%s order_ids=%s" % [
@@ -509,8 +673,26 @@ func _broadcast_game_state() -> void:
 	Game_State_Manager.send_game_state(snapshot)
 
 # Sync Countdown to start game (SERVER-AUTHORITATIVE)
+func register_countdown(requesting_peer_id: int, flag: bool, seconds: float = 10.0) -> Dictionary:
+	if requesting_peer_id != _current_host_peer_id():
+		return {"ok": false, "reason": "Only the Host may control countdown"}
+	if flag:
+		if roster_locked:
+			return {"ok": false, "reason": "Game roster locked"}
+		if players.size() < 2 or players.size() > MAX_CONNECTIONS:
+			return {"ok": false, "reason": "Game Roster needs 2–6 players"}
+		for player in players.values():
+			if not (player as Player).ready:
+				return {"ok": false, "reason": "All players must be Ready"}
+	_toggle_countdown(flag, seconds)
+	return {"ok": true}
+
 func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 	if flag:
+		countdown_active = true
+		roster_locked = true
+		countdown_generation += 1
+		var scheduled_generation: int = countdown_generation
 		var args: PackedStringArray = OS.get_cmdline_args()
 		if ProjectSettings.get_setting("debug/short_countdown", false) or args.has("--short-countdown"):
 			sec = 1.0
@@ -526,6 +708,9 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 		# Schedule the scene change on the server
 		var t: SceneTreeTimer = get_tree().create_timer(float(seconds), false)
 		t.timeout.connect(func ():
+			if not countdown_active or scheduled_generation != countdown_generation:
+				return
+			countdown_active = false
 			_log("Countdown finished - ordering scene change")
 			start_game()
 			Game_State_Manager.send_change_scene(GAME_SCENE_PATH)
@@ -536,6 +721,9 @@ func _toggle_countdown(flag: bool, sec: float = 10.0) -> void:
 			)
 		)
 	else:
+		countdown_active = false
+		roster_locked = false
+		countdown_generation += 1
 		_log("Server stopping countdown to start game!")
 		# Optional: if you add a 'cancel' path, you can broadcast a stop here
 		Game_State_Manager.send_toggle_countdown(false)
@@ -610,6 +798,9 @@ func _handle_round_finished(finishing_peer_id: int, finish_message: String) -> v
 		Game_State_Manager.send_round_update(game_manager.round_number, "Game Over: %s" % winner_names)
 		_broadcast_game_state()
 		return
+	if _all_connected_players_voted_next_round():
+		_advance_round_after_confirmations()
+		return
 	Game_State_Manager.send_round_update(
 		completed_round,
 		"End of Round"
@@ -618,6 +809,11 @@ func _handle_round_finished(finishing_peer_id: int, finish_message: String) -> v
 
 func _next_round_vote_peer_ids() -> Array:
 	var vote_ids: Array = []
+	if game_manager != null and game_manager.round_summary_pending:
+		for raw_peer_id in players.keys():
+			var ai_peer_id: int = int(raw_peer_id)
+			if (players[ai_peer_id] as Player).is_ai:
+				vote_ids.append(ai_peer_id)
 	for raw_peer_id in next_round_votes.keys():
 		var peer_id: int = int(raw_peer_id)
 		if players.has(peer_id):
@@ -629,7 +825,10 @@ func _all_connected_players_voted_next_round() -> bool:
 	if players.is_empty():
 		return false
 	for raw_peer_id in players.keys():
-		if not next_round_votes.has(int(raw_peer_id)):
+		var peer_id: int = int(raw_peer_id)
+		if (players[peer_id] as Player).is_ai:
+			continue
+		if not next_round_votes.has(peer_id):
 			return false
 	return true
 
@@ -669,11 +868,15 @@ func _winner_names_text(winner_ids: Array) -> String:
 func _all_connected_players_voted_play_again() -> bool:
 	if int(players.size()) < 2:
 		return false
+	var human_count: int = 0
 	for raw_peer_id in players.keys():
 		var peer_id: int = int(raw_peer_id)
+		if (players[peer_id] as Player).is_ai:
+			continue
+		human_count += 1
 		if not play_again_votes.has(peer_id):
 			return false
-	return true
+	return human_count > 0
 
 func _play_again_vote_peer_ids() -> Array:
 	var ids: Array = []
@@ -697,7 +900,7 @@ func _restart_game_from_play_again_votes() -> void:
 	for raw_peer_id in players.keys():
 		var peer_id: int = int(raw_peer_id)
 		if players.has(peer_id) and players[peer_id] is Player:
-			(players[peer_id] as Player).ready = false
+			(players[peer_id] as Player).ready = (players[peer_id] as Player).is_ai
 	_broadcast_player_state()
 	start_game()
 
@@ -721,7 +924,7 @@ func _return_to_lobby_with_connected_players(reason: String) -> void:
 	for raw_peer_id in players.keys():
 		var peer_id: int = int(raw_peer_id)
 		if players.has(peer_id) and players[peer_id] is Player:
-			(players[peer_id] as Player).ready = false
+			(players[peer_id] as Player).ready = (players[peer_id] as Player).is_ai
 	if game_manager != null:
 		game_manager.end_game_session()
 		game_manager.load_players(players)
