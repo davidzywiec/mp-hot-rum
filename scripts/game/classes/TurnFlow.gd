@@ -67,6 +67,7 @@ func _draw_from_deck(peer_id: int, move: Dictionary) -> Dictionary:
 		return _reject("Ignoring draw request from %s: turn pickup already completed." % str(peer_id))
 	if game_manager.claim_window_active:
 		return _reject("Ignoring draw request from %s while claim window is active." % str(peer_id))
+	game_manager.replenish_deck_if_empty()
 	var drawn_card: Card = game_manager.draw_card_from_deck_for_peer(peer_id)
 	if drawn_card == null:
 		return _reject("Draw from deck failed for peer %s (deck empty or unavailable)." % str(peer_id))
@@ -90,6 +91,7 @@ func _take_from_pile(peer_id: int) -> Dictionary:
 		return _reject("Ignoring take-pile request from %s: turn pickup already completed." % str(peer_id))
 	if game_manager.claim_window_active:
 		return _reject("Ignoring take-pile request from %s while claim window is active." % str(peer_id))
+	game_manager.replenish_deck_if_empty()
 	var taken_card: Card = game_manager.take_discard_top_for_peer(peer_id)
 	if taken_card == null:
 		return _reject("Take from pile failed for peer %s (pile empty)." % str(peer_id))
@@ -272,7 +274,7 @@ func _start_claim_window(opened_by_peer_id: int, duration_seconds: int, result: 
 	if claim_id == -1:
 		return false
 	_reset_claim_pass_tracking(claim_id)
-	if last_discard_peer_id > 0:
+	if last_discard_peer_id != -1:
 		claim_passed_peer_ids[last_discard_peer_id] = true
 		_add_log(result, "Peer %s is automatically passed for the Claim Window because they discarded the offered card." % str(last_discard_peer_id))
 	if _all_eligible_claim_players_passed():

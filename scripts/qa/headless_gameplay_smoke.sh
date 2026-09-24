@@ -5,14 +5,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-godot4}"
 LOG_DIR="${LOG_DIR:-"$ROOT_DIR/.tmp/headless-gameplay-smoke"}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-30}"
+SMOKE_AI_DIFFICULTY="${SMOKE_AI_DIFFICULTY:-}"
 SERVER_LOG="$LOG_DIR/server.log"
 CLIENT_ONE_LOG="$LOG_DIR/client-one.log"
 CLIENT_TWO_LOG="$LOG_DIR/client-two.log"
+HOST_LOBBY_LOG="$LOG_DIR/host-lobby.log"
+HOST_LOBBY_GODOT_LOG="$LOG_DIR/host-lobby-godot.log"
 CLIENT_ONE_GODOT_LOG="$LOG_DIR/client-one-godot.log"
 CLIENT_TWO_GODOT_LOG="$LOG_DIR/client-two-godot.log"
 
 mkdir -p "$LOG_DIR"
-rm -f "$SERVER_LOG" "$CLIENT_ONE_LOG" "$CLIENT_TWO_LOG" "$CLIENT_ONE_GODOT_LOG" "$CLIENT_TWO_GODOT_LOG"
+rm -f "$SERVER_LOG" "$CLIENT_ONE_LOG" "$CLIENT_TWO_LOG" "$CLIENT_ONE_GODOT_LOG" "$CLIENT_TWO_GODOT_LOG" "$HOST_LOBBY_LOG" "$HOST_LOBBY_GODOT_LOG"
 
 server_pid=""
 client_one_pid=""
@@ -42,17 +45,45 @@ if ! kill -0 "$server_pid" 2>/dev/null; then
 	exit 1
 fi
 
+echo "[SMOKE] Checking first Host Lobby controls..."
+if ! "$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$HOST_LOBBY_GODOT_LOG" --script res://scripts/test/ai_host_lobby_client_test.gd >"$HOST_LOBBY_LOG" 2>&1; then
+	echo "[SMOKE][FAIL] First Host could not use the Lobby AI controls."
+	cat "$HOST_LOBBY_LOG"
+	exit 1
+fi
+
 echo "[SMOKE] Starting smoke clients..."
-"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_ONE_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- --headless-smoke --player-name=SmokeOne --start-game "--timeout=$TIMEOUT_SECONDS" >"$CLIENT_ONE_LOG" 2>&1 &
+client_one_args=(--headless-smoke --player-name=SmokeOne --start-game "--timeout=$TIMEOUT_SECONDS")
+if [[ -n "$SMOKE_AI_DIFFICULTY" ]]; then
+	client_one_args+=("--add-ai=$SMOKE_AI_DIFFICULTY")
+fi
+"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_ONE_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- "${client_one_args[@]}" >"$CLIENT_ONE_LOG" 2>&1 &
 client_one_pid="$!"
-"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_TWO_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- --headless-smoke --player-name=SmokeTwo "--timeout=$TIMEOUT_SECONDS" >"$CLIENT_TWO_LOG" 2>&1 &
-client_two_pid="$!"
+if [[ -z "$SMOKE_AI_DIFFICULTY" ]]; then
+	host_registered=false
+	for _attempt in {1..100}; do
+		if rg -q "SmokeOne has joined the game" "$SERVER_LOG"; then
+			host_registered=true
+			break
+		fi
+		sleep 0.1
+	done
+	if [[ "$host_registered" != true ]]; then
+		echo "[SMOKE][FAIL] Starting client did not become Host."
+		exit 1
+	fi
+	"$GODOT_BIN" --headless --path "$ROOT_DIR" --log-file "$CLIENT_TWO_GODOT_LOG" "res://scenes/test/HeadlessSmokeClient.tscn" -- --headless-smoke --player-name=SmokeTwo "--timeout=$TIMEOUT_SECONDS" >"$CLIENT_TWO_LOG" 2>&1 &
+	client_two_pid="$!"
+fi
 
 set +e
 wait "$client_one_pid"
 client_one_status="$?"
-wait "$client_two_pid"
-client_two_status="$?"
+client_two_status=0
+if [[ -n "$client_two_pid" ]]; then
+	wait "$client_two_pid"
+	client_two_status="$?"
+fi
 set -e
 
 if [[ "$client_one_status" -ne 0 || "$client_two_status" -ne 0 ]]; then

@@ -22,7 +22,7 @@ func _ready() -> void:
 	# Connect to signals emitted by networking logic
 	SignalManager.failed_connection.connect(connection_failed)
 	SignalManager.server_connected.connect(connection_success)
-	SignalManager.player_connected.connect(connection_success)
+	Game_State_Manager.lobby_admission_result.connect(_on_lobby_admission_result)
 
 	# Initialize status label to be hidden and empty
 	status_label.text = ""
@@ -50,19 +50,26 @@ func join_server():
 
 # --- Triggered when connection fails (from ClientHandler) ---
 func connection_failed():
-	status_label.text = "❌ Error connecting."
+	if not status_label.text.contains("Lobby full"):
+		status_label.text = "❌ Error connecting."
 	status_label.visible = true
 
 # --- Triggered on successful connection (from ClientHandler or server peer registration) ---
 func connection_success(_user_id = null):
-	status_label.text = "✅ Connected!"
+	status_label.text = "Joining Lobby..."
 	status_label.visible = true
 
 	# Send the username to the server for player registration
 	Network_Manager.rpc_id(1, "register_player", username_line_edit.text.strip_edges(), multiplayer.get_unique_id())
 	print("Emitting username:", username_line_edit.text)
 
-	# Load the lobby scene
+
+func _on_lobby_admission_result(accepted: bool, reason: String) -> void:
+	if not accepted:
+		status_label.text = reason if not reason.is_empty() else "Could not join Lobby."
+		status_label.visible = true
+		return
+	status_label.text = "✅ Connected!"
 	change_to_lobby()
 
 # --- Helper to change scenes to the main lobby UI ---
