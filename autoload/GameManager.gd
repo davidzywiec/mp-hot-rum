@@ -34,6 +34,7 @@ var player_committed_melds: Dictionary = {} # key: peer_id, value: Array[Diction
 var next_meld_id: int = 1
 var public_melds_data: Array = [] # client-side snapshot cache
 var current_round_requirement_data: Dictionary = {}
+var round_requirements_data: Array = []
 var private_put_down_buffer_data: Array = [] # client-only staged put-down cards for local player
 var score_sheet_data: Array = [] # Array[Dictionary] with per-round scores
 var latest_round_score_data: Dictionary = {}
@@ -77,6 +78,7 @@ func start_game(ruleset_path : String = "res://data/rulesets/default_ruleset.jso
 	var loaded_ruleset: Ruleset = ruleset_loader.load_ruleset(ruleset_path)
 	if loaded_ruleset != null:
 		ruleset = loaded_ruleset
+		round_requirements_data = serialize_round_requirements()
 		_reset_scoring_state()
 		_load_card_point_rules()
 		_load_player1_hand_override()
@@ -110,6 +112,7 @@ func end_game_session() -> void:
 	reset_turn_pickup_completed()
 	reset_round_put_down_status()
 	current_round_requirement_data.clear()
+	round_requirements_data.clear()
 	private_put_down_buffer_data.clear()
 	_reset_scoring_state()
 
@@ -322,6 +325,24 @@ func serialize_current_round_requirement() -> Dictionary:
 		"runs_of_7": int(requirement.runs_of_7),
 		"all_cards": bool(requirement.all_cards)
 	}
+
+func serialize_round_requirements() -> Array:
+	var serialized: Array = []
+	if ruleset == null:
+		return round_requirements_data.duplicate(true)
+	for raw_requirement in ruleset.round_requirements:
+		if not raw_requirement is RoundRequirement:
+			continue
+		var requirement: RoundRequirement = raw_requirement as RoundRequirement
+		serialized.append({
+			"round": int(requirement.game_round),
+			"deal_count": int(requirement.deal_count),
+			"sets_of_3": int(requirement.sets_of_3),
+			"runs_of_4": int(requirement.runs_of_4),
+			"runs_of_7": int(requirement.runs_of_7),
+			"all_cards": bool(requirement.all_cards)
+		})
+	return serialized
 
 func get_current_round_requirement_dict() -> Dictionary:
 	if not current_round_requirement_data.is_empty():
@@ -1048,6 +1069,21 @@ func apply_game_state(state: Dictionary) -> void:
 				"runs_of_7": int(round_requirement_dict.get("runs_of_7", 0)),
 				"all_cards": bool(round_requirement_dict.get("all_cards", false))
 			}
+	var all_round_requirements_raw: Variant = state.get("round_requirements", [])
+	round_requirements_data.clear()
+	if typeof(all_round_requirements_raw) == TYPE_ARRAY:
+		for raw_requirement in all_round_requirements_raw as Array:
+			if typeof(raw_requirement) != TYPE_DICTIONARY:
+				continue
+			var requirement_dict: Dictionary = raw_requirement as Dictionary
+			round_requirements_data.append({
+				"round": int(requirement_dict.get("round", round_requirements_data.size() + 1)),
+				"deal_count": int(requirement_dict.get("deal_count", 0)),
+				"sets_of_3": int(requirement_dict.get("sets_of_3", 0)),
+				"runs_of_4": int(requirement_dict.get("runs_of_4", 0)),
+				"runs_of_7": int(requirement_dict.get("runs_of_7", 0)),
+				"all_cards": bool(requirement_dict.get("all_cards", false))
+			})
 	score_sheet_data.clear()
 	var score_sheet_raw: Variant = state.get("score_sheet", [])
 	if typeof(score_sheet_raw) == TYPE_ARRAY:
