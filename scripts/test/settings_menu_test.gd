@@ -27,6 +27,8 @@ func _run() -> void:
 	var game_ui_scene: PackedScene = load("res://scenes/game/GameUI.tscn") as PackedScene
 	var game_ui: Control = game_ui_scene.instantiate() as Control
 	root.add_child(game_ui)
+	game_ui.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	game_ui.set_process(false)
 	await process_frame
 
 	var menu_button: Button = game_ui.get_node_or_null("SettingsButton") as Button
