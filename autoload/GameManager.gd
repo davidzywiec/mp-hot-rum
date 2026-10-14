@@ -318,6 +318,9 @@ func serialize_current_round_requirement() -> Dictionary:
 	var requirement: RoundRequirement = get_current_round_requirement()
 	if requirement == null:
 		return {}
+	return _serialize_round_requirement(requirement)
+
+func _serialize_round_requirement(requirement: RoundRequirement) -> Dictionary:
 	return {
 		"round": int(requirement.game_round),
 		"sets_of_3": int(requirement.sets_of_3),
@@ -334,14 +337,7 @@ func serialize_round_requirements() -> Array:
 		if not raw_requirement is RoundRequirement:
 			continue
 		var requirement: RoundRequirement = raw_requirement as RoundRequirement
-		serialized.append({
-			"round": int(requirement.game_round),
-			"deal_count": int(requirement.deal_count),
-			"sets_of_3": int(requirement.sets_of_3),
-			"runs_of_4": int(requirement.runs_of_4),
-			"runs_of_7": int(requirement.runs_of_7),
-			"all_cards": bool(requirement.all_cards)
-		})
+		serialized.append(_serialize_round_requirement(requirement))
 	return serialized
 
 func get_current_round_requirement_dict() -> Dictionary:

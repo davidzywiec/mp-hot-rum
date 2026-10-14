@@ -301,12 +301,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	if settings_overlay == null:
 		return
-	settings_overlay.visible = not settings_overlay.visible
-	if settings_overlay.visible:
-		_refresh_settings_round_rules()
-		settings_volume_slider.grab_focus()
-	else:
-		settings_button.grab_focus()
+	_toggle_settings_menu()
 	get_viewport().set_input_as_handled()
 
 func _ensure_settings_menu() -> void:
