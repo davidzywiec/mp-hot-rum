@@ -323,6 +323,7 @@ func serialize_current_round_requirement() -> Dictionary:
 func _serialize_round_requirement(requirement: RoundRequirement) -> Dictionary:
 	return {
 		"round": int(requirement.game_round),
+		"deal_count": int(requirement.deal_count),
 		"sets_of_3": int(requirement.sets_of_3),
 		"runs_of_4": int(requirement.runs_of_4),
 		"runs_of_7": int(requirement.runs_of_7),

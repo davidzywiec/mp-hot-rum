@@ -22,6 +22,9 @@ func _run() -> void:
 	ruleset.round_requirements = [first_round, second_round]
 	game_manager.ruleset = ruleset
 	game_manager.round_requirements_data = game_manager.serialize_round_requirements()
+	if int(game_manager.round_requirements_data[0].get("deal_count", 0)) != 7 or int(game_manager.round_requirements_data[1].get("deal_count", 0)) != 8:
+		_fail("Expected serialized Round rules to include each configured deal count.")
+		return
 	var player_settings: Node = root.get_node("PlayerSettings")
 	_original_volume = float(player_settings.call("get_master_volume"))
 	var game_ui_scene: PackedScene = load("res://scenes/game/GameUI.tscn") as PackedScene
