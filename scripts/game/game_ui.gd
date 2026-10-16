@@ -310,13 +310,14 @@ func _ensure_settings_menu() -> void:
 	settings_button = Button.new()
 	settings_button.name = "SettingsButton"
 	settings_button.text = "Menu"
-	settings_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	settings_button.offset_left = -112.0
-	settings_button.offset_top = 16.0
-	settings_button.offset_right = -16.0
-	settings_button.offset_bottom = 60.0
+	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_button.pressed.connect(_toggle_settings_menu)
-	add_child(settings_button)
+	var round_data_container: VBoxContainer = get_node_or_null("RoundDataContainer/MC/VBCRoundData") as VBoxContainer
+	if round_data_container == null:
+		push_error("Settings menu button requires RoundDataContainer/MC/VBCRoundData.")
+		return
+	round_data_container.add_child(settings_button)
+	round_data_container.move_child(settings_button, 0)
 	MDTheme.apply_button(settings_button, 18)
 
 	settings_overlay = ColorRect.new()

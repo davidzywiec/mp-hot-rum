@@ -34,9 +34,14 @@ func _run() -> void:
 	game_ui.set_process(false)
 	await process_frame
 
-	var menu_button: Button = game_ui.get_node_or_null("SettingsButton") as Button
+	var menu_button: Button = game_ui.get_node_or_null("RoundDataContainer/MC/VBCRoundData/SettingsButton") as Button
 	if menu_button == null:
-		_fail("Expected an in-game settings button in the top-right corner.")
+		_fail("Expected the in-game settings button in VBCRoundData.")
+		return
+	var round_data_container: VBoxContainer = menu_button.get_parent() as VBoxContainer
+	var round_number_container: Control = round_data_container.get_node("RoundNumberContainer") as Control
+	if menu_button.get_index() >= round_number_container.get_index():
+		_fail("Expected the settings button above the Round number container.")
 		return
 	menu_button.pressed.emit()
 	await process_frame
