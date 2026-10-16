@@ -27,9 +27,10 @@ func _run() -> void:
 		return
 	var player_settings: Node = root.get_node("PlayerSettings")
 	_original_volume = float(player_settings.call("get_master_volume"))
-	var game_ui_scene: PackedScene = load("res://scenes/game/GameUI.tscn") as PackedScene
-	var game_ui: Control = game_ui_scene.instantiate() as Control
-	root.add_child(game_ui)
+	var main_game_scene: PackedScene = load("res://scenes/game/MainGame.tscn") as PackedScene
+	var main_game: Node = main_game_scene.instantiate()
+	root.add_child(main_game)
+	var game_ui: Control = main_game.get_node("UI/GameUI") as Control
 	game_ui.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	game_ui.set_process(false)
 	await process_frame
@@ -43,8 +44,13 @@ func _run() -> void:
 	if menu_button.get_index() >= round_number_container.get_index():
 		_fail("Expected the settings button above the Round number container.")
 		return
-	if menu_button.position.y < 164.0:
-		_fail("Expected the settings button to be positioned lower in the window.")
+	var viewport_rect: Rect2 = Rect2(Vector2.ZERO, menu_button.get_viewport_rect().size)
+	var button_rect: Rect2 = menu_button.get_global_rect()
+	if button_rect.position.y < 100.0:
+		_fail("Expected the settings button to be positioned lower in the window. Rect: %s" % str(button_rect))
+		return
+	if not menu_button.is_visible_in_tree() or not viewport_rect.encloses(button_rect):
+		_fail("Expected the settings button to be visible within the game window. Button: %s, viewport: %s" % [str(button_rect), str(viewport_rect)])
 		return
 	menu_button.pressed.emit()
 	await process_frame
