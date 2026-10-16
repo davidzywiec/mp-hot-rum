@@ -32,6 +32,11 @@ var pile_title_label: Label = null
 var pile_card_holder: CenterContainer = null
 var pile_card_view: CardView = null
 var round_rules_label: Label = null
+var settings_button: Button = null
+var settings_overlay: ColorRect = null
+var settings_volume_slider: HSlider = null
+var settings_volume_label: Label = null
+var settings_round_rules: VBoxContainer = null
 var turn_pickup_overlay: ColorRect = null
 var turn_pickup_title_label: Label = null
 var turn_pickup_status_label: Label = null
@@ -98,6 +103,7 @@ var _round_summary_signature: String = ""
 
 func _ready() -> void:
 	theme = MORNING_DIGEST_THEME
+	_ensure_settings_menu()
 	_resolve_hand_nodes()
 	if pass_pile_button != null:
 		pass_pile_button.pressed.connect(_on_pass_pile_pressed)
@@ -139,6 +145,7 @@ func _ready() -> void:
 	_refresh_meld_board_if_open()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_refresh_settings_round_rules()
 	_update_round_summary_overlay()
 	_update_game_over_overlay()
 	_update_turn_pickup_overlay()
@@ -176,6 +183,7 @@ func _on_game_state_updated(state: Dictionary) -> void:
 	_update_claim_window_table()
 	_update_pile_view()
 	_update_round_rules_ui()
+	_refresh_settings_round_rules()
 	_update_round_summary_overlay()
 	_update_game_over_overlay()
 	_update_turn_pickup_overlay()
@@ -284,6 +292,203 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mouse_button.button_index == MOUSE_BUTTON_LEFT and not mouse_button.pressed:
 			_finish_card_drag(mouse_button.global_position)
 			get_viewport().set_input_as_handled()
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event is InputEventKey:
+		return
+	var key_event: InputEventKey = event as InputEventKey
+	if key_event.keycode != KEY_ESCAPE or not key_event.pressed or key_event.echo:
+		return
+	if settings_overlay == null:
+		return
+	_toggle_settings_menu()
+	get_viewport().set_input_as_handled()
+
+func _ensure_settings_menu() -> void:
+	if settings_button != null:
+		return
+	settings_button = Button.new()
+	settings_button.name = "SettingsButton"
+	settings_button.text = "Menu"
+	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_button.pressed.connect(_toggle_settings_menu)
+	var round_data_container: VBoxContainer = get_node_or_null("RoundDataContainer/MC/VBCRoundData") as VBoxContainer
+	if round_data_container == null:
+		push_error("Settings menu button requires RoundDataContainer/MC/VBCRoundData.")
+		return
+	var settings_button_top_spacer: Control = Control.new()
+	settings_button_top_spacer.name = "SettingsButtonTopSpacer"
+	settings_button_top_spacer.custom_minimum_size.y = 164.0
+	settings_button_top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	round_data_container.add_child(settings_button_top_spacer)
+	round_data_container.add_child(settings_button)
+	round_data_container.move_child(settings_button_top_spacer, 0)
+	round_data_container.move_child(settings_button, 1)
+	MDTheme.apply_button(settings_button, 18)
+
+	settings_overlay = ColorRect.new()
+	settings_overlay.name = "SettingsOverlay"
+	settings_overlay.color = Color(0.035, 0.055, 0.07, 0.72)
+	settings_overlay.visible = false
+	settings_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	settings_overlay.z_index = 200
+	settings_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(settings_overlay)
+
+	var center: CenterContainer = CenterContainer.new()
+	center.name = "Center"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_overlay.add_child(center)
+
+	var panel: PanelContainer = PanelContainer.new()
+	panel.name = "Panel"
+	panel.custom_minimum_size = Vector2(580.0, 560.0)
+	panel.theme = MORNING_DIGEST_THEME
+	center.add_child(panel)
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.name = "Margin"
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+
+	var content: VBoxContainer = VBoxContainer.new()
+	content.name = "Content"
+	content.add_theme_constant_override("separation", 12)
+	margin.add_child(content)
+
+	var header: HBoxContainer = HBoxContainer.new()
+	header.name = "Header"
+	content.add_child(header)
+	var title: Label = Label.new()
+	title.text = "Game Menu"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 24)
+	header.add_child(title)
+	var close_button: Button = Button.new()
+	close_button.name = "CloseButton"
+	close_button.text = "Close"
+	close_button.pressed.connect(_close_settings_menu)
+	header.add_child(close_button)
+	MDTheme.apply_button(close_button, 16)
+
+	var sound_row: HBoxContainer = HBoxContainer.new()
+	sound_row.name = "SoundRow"
+	sound_row.add_theme_constant_override("separation", 12)
+	content.add_child(sound_row)
+	var sound_label: Label = Label.new()
+	sound_label.text = "Sound volume"
+	sound_label.custom_minimum_size.x = 130.0
+	sound_row.add_child(sound_label)
+	settings_volume_slider = HSlider.new()
+	settings_volume_slider.name = "VolumeSlider"
+	settings_volume_slider.min_value = 0.0
+	settings_volume_slider.max_value = 100.0
+	settings_volume_slider.step = 1.0
+	settings_volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_volume_slider.value = PlayerSettings.get_master_volume() * 100.0
+	settings_volume_slider.value_changed.connect(_on_settings_volume_changed)
+	sound_row.add_child(settings_volume_slider)
+	settings_volume_label = Label.new()
+	settings_volume_label.name = "VolumeLabel"
+	settings_volume_label.custom_minimum_size.x = 44.0
+	settings_volume_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	sound_row.add_child(settings_volume_label)
+	_update_settings_volume_label(settings_volume_slider.value)
+
+	var rules_title: Label = Label.new()
+	rules_title.text = "Round Rules"
+	rules_title.add_theme_font_size_override("font_size", 20)
+	content.add_child(rules_title)
+	var rules_scroll: ScrollContainer = ScrollContainer.new()
+	rules_scroll.name = "RulesScroll"
+	rules_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rules_scroll.custom_minimum_size.y = 300.0
+	content.add_child(rules_scroll)
+	settings_round_rules = VBoxContainer.new()
+	settings_round_rules.name = "RoundRules"
+	settings_round_rules.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_round_rules.add_theme_constant_override("separation", 10)
+	rules_scroll.add_child(settings_round_rules)
+
+	var quit_button: Button = Button.new()
+	quit_button.name = "QuitButton"
+	quit_button.text = "Quit to Main Menu"
+	quit_button.pressed.connect(_on_leave_game_pressed)
+	content.add_child(quit_button)
+	MDTheme.apply_button(quit_button, 18)
+	_refresh_settings_round_rules()
+
+func _toggle_settings_menu() -> void:
+	if settings_overlay == null:
+		return
+	settings_overlay.visible = not settings_overlay.visible
+	if settings_overlay.visible:
+		_refresh_settings_round_rules()
+		settings_volume_slider.grab_focus()
+	else:
+		settings_button.grab_focus()
+
+func _close_settings_menu() -> void:
+	if settings_overlay == null:
+		return
+	settings_overlay.visible = false
+	settings_button.grab_focus()
+
+func _on_settings_volume_changed(value: float) -> void:
+	PlayerSettings.set_master_volume(value / 100.0)
+	_update_settings_volume_label(value)
+
+func _update_settings_volume_label(value: float) -> void:
+	if settings_volume_label != null:
+		settings_volume_label.text = "%d%%" % roundi(value)
+
+func _refresh_settings_round_rules() -> void:
+	if settings_round_rules == null:
+		return
+	for child in settings_round_rules.get_children():
+		child.queue_free()
+	var requirements: Array = GameManager.round_requirements_data
+	if requirements.is_empty():
+		var current_requirement: Dictionary = GameManager.get_current_round_requirement_dict()
+		if not current_requirement.is_empty():
+			requirements = [current_requirement]
+	if requirements.is_empty():
+		var unavailable: Label = Label.new()
+		unavailable.text = "Round rules are not available yet."
+		settings_round_rules.add_child(unavailable)
+		return
+	for raw_requirement in requirements:
+		if typeof(raw_requirement) != TYPE_DICTIONARY:
+			continue
+		var requirement: Dictionary = raw_requirement as Dictionary
+		var round_number: int = int(requirement.get("round", 0))
+		var details: Array[String] = []
+		var deal_count: int = int(requirement.get("deal_count", 0))
+		if deal_count > 0:
+			details.append("Deal %d cards" % deal_count)
+		var sets_required: int = int(requirement.get("sets_of_3", 0))
+		if sets_required > 0:
+			details.append("%d %s of 3" % [sets_required, "set" if sets_required == 1 else "sets"])
+		var runs_of_four: int = int(requirement.get("runs_of_4", 0))
+		if runs_of_four > 0:
+			details.append("%d %s of 4" % [runs_of_four, "run" if runs_of_four == 1 else "runs"])
+		var runs_of_seven: int = int(requirement.get("runs_of_7", 0))
+		if runs_of_seven > 0:
+			details.append("%d %s of 7" % [runs_of_seven, "run" if runs_of_seven == 1 else "runs"])
+		if bool(requirement.get("all_cards", false)):
+			details.append("Use all cards to go out")
+		if details.is_empty():
+			details.append("No meld requirement")
+		var round_label: Label = Label.new()
+		round_label.name = "RoundRule%d" % round_number
+		round_label.text = "Round %d\n%s" % [round_number, " · ".join(details)]
+		round_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		round_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		settings_round_rules.add_child(round_label)
 
 func _begin_card_drag(card_view: CardView, mouse_global: Vector2) -> void:
 	if hand_container == null:

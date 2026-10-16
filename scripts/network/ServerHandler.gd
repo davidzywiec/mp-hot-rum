@@ -718,6 +718,7 @@ func _broadcast_game_state() -> void:
 		"put_down_progress": game_manager.get_put_down_progress_snapshot(),
 		"public_melds": game_manager.serialize_public_melds(),
 		"round_requirement": game_manager.serialize_current_round_requirement(),
+		"round_requirements": game_manager.serialize_round_requirements(),
 		"score_sheet": game_manager.get_score_sheet_data(),
 		"latest_round_score": game_manager.get_latest_round_score_data(),
 		"round_summary_pending": game_manager.round_summary_pending,
