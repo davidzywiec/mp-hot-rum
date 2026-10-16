@@ -316,8 +316,14 @@ func _ensure_settings_menu() -> void:
 	if round_data_container == null:
 		push_error("Settings menu button requires RoundDataContainer/MC/VBCRoundData.")
 		return
+	var settings_button_top_spacer: Control = Control.new()
+	settings_button_top_spacer.name = "SettingsButtonTopSpacer"
+	settings_button_top_spacer.custom_minimum_size.y = 64.0
+	settings_button_top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	round_data_container.add_child(settings_button_top_spacer)
 	round_data_container.add_child(settings_button)
-	round_data_container.move_child(settings_button, 0)
+	round_data_container.move_child(settings_button_top_spacer, 0)
+	round_data_container.move_child(settings_button, 1)
 	MDTheme.apply_button(settings_button, 18)
 
 	settings_overlay = ColorRect.new()
