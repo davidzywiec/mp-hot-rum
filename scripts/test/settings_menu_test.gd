@@ -43,7 +43,7 @@ func _run() -> void:
 	if menu_button.get_index() >= round_number_container.get_index():
 		_fail("Expected the settings button above the Round number container.")
 		return
-	if menu_button.position.y < 64.0:
+	if menu_button.position.y < 164.0:
 		_fail("Expected the settings button to be positioned lower in the window.")
 		return
 	menu_button.pressed.emit()

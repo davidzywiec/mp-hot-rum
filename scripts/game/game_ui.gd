@@ -318,7 +318,7 @@ func _ensure_settings_menu() -> void:
 		return
 	var settings_button_top_spacer: Control = Control.new()
 	settings_button_top_spacer.name = "SettingsButtonTopSpacer"
-	settings_button_top_spacer.custom_minimum_size.y = 64.0
+	settings_button_top_spacer.custom_minimum_size.y = 164.0
 	settings_button_top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	round_data_container.add_child(settings_button_top_spacer)
 	round_data_container.add_child(settings_button)
